@@ -80,6 +80,109 @@ typedef enum
 
     }
 
+  static void usart2_write_char(uint8_t character)
+    {
+        while ((USART2->SR & USART_SR_TXE) == 0U)
+        {
+            /* Wait until the transmit data register is empty. */
+        }
+
+        USART2->DR = character;
+    }
+
+  static void usart2_write_text(const char *text)
+    {
+        while (*text != '\0')
+        {
+            usart2_write_char((uint8_t)*text);
+            text++;
+        }
+    }
+
+  static uint8_t usart2_start_command_received(void)
+    {
+        static const uint8_t start_command[] = "START";
+        static uint8_t command_index = 0U;
+        uint8_t received_byte;
+
+        if ((USART2->SR & USART_SR_RXNE) == 0U)
+        {
+            return 0U;
+        }
+
+        received_byte = (uint8_t)USART2->DR;
+
+        if ((received_byte == '\r') || (received_byte == '\n'))
+        {
+            if (command_index == 5U)
+            {
+                command_index = 0U;
+                return 1U;
+            }
+
+            command_index = 0U;
+            return 0U;
+        }
+
+        if ((command_index < 5U) &&
+            (received_byte == start_command[command_index]))
+        {
+            command_index++;
+        }
+        else if (received_byte == start_command[0])
+        {
+            command_index = 1U;
+        }
+        else
+        {
+            command_index = 0U;
+        }
+
+        return 0U;
+    }
+
+  static uint8_t usart2_stop_command_received(void)
+    {
+        static const uint8_t stop_command[] = "STOP";
+        static uint8_t command_index = 0U;
+        uint8_t received_byte;
+
+        if ((USART2->SR & USART_SR_RXNE) == 0U)
+        {
+            return 0U;
+        }
+
+        received_byte = (uint8_t)USART2->DR;
+
+        if ((received_byte == '\r') || (received_byte == '\n'))
+        {
+            if (command_index == 4U)
+            {
+                command_index = 0U;
+                return 1U;
+            }
+
+            command_index = 0U;
+            return 0U;
+        }
+
+        if ((command_index < 4U) &&
+            (received_byte == stop_command[command_index]))
+        {
+            command_index++;
+        }
+        else if (received_byte == stop_command[0])
+        {
+            command_index = 1U;
+        }
+        else
+        {
+            command_index = 0U;
+        }
+
+        return 0U;
+    }
+
   int main(void)
   {
 	  while (1)
@@ -89,13 +192,24 @@ typedef enum
 		  case STATE_INIT:
 			  safe_output_init();
 			  usart2_pins_init();
+			  usart2_write_text("READY\r\n");
 			  current_state = STATE_IDLE;
 			  break;
 
 		  case STATE_IDLE:
+			  if (usart2_start_command_received() != 0U)
+			  {
+				  current_state = STATE_AUTO;
+				  usart2_write_text("AUTO\r\n");
+			  }
 			  break;
 
 		  case STATE_AUTO:
+			  if (usart2_stop_command_received() != 0U)
+			  {
+				  current_state = STATE_STOP;
+				  usart2_write_text("STOP\r\n");
+			  }
 			  break;
 
 		  case STATE_DIAG:
