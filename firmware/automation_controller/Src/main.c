@@ -19,7 +19,6 @@
 #include <stdint.h>
 #include "stm32f401xe.h"
 
-
 typedef enum
   {
       STATE_INIT = 0,
@@ -44,14 +43,41 @@ typedef enum
 
   static void usart2_pins_init(void)
     {
+        /* USART2 레지스터를 사용하기 전에 APB1 주변장치 클록을 활성화한다. */
         RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 
+        /* PA2는 MODER2[1:0] = bit[5:4], PA3은 MODER3[1:0] = bit[7:6]를 사용한다.
+         * GPIO_MODER_MODER2/3은 각 2비트 필드 전체(0b11)를 선택하는 마스크다.
+         * ~(...)와 &= 연산으로 두 필드만 00(입력 모드)으로 지우며, 다른 핀 설정은 유지한다.
+         */
         GPIOA->MODER &= ~(GPIO_MODER_MODER2 | GPIO_MODER_MODER3);
+
+
+
+
+
+        /* PA2·PA3의 상위 모드 비트(_1)만 1로 설정한다.
+         * 앞에서 두 핀의 모드 필드를 00으로 지웠으므로, 각 필드는 10이 되어
+         * Alternate Function(AF) 모드가 된다.
+        */
         GPIOA->MODER |= GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1;
 
-        GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL2 | GPIO_AFRL_AFRL3);
-        GPIOA->AFR[0] |= (7U << GPIO_AFRL_AFRL2_Pos);
-        GPIOA->AFR[0] |= (7U << GPIO_AFRL_AFRL3_Pos);
+        /* PA2·PA3의 기존 AF 번호를 지운다. AFR[0]은 PA0~PA7의 AF 번호를 설정한다. */
+        GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2 | GPIO_AFRL_AFSEL3);
+
+        /* STM32F401RE의 AF 매핑에서 PA2=USART2_TX, PA3=USART2_RX는 모두 AF7이다. */
+        GPIOA->AFR[0] |= (7U << GPIO_AFRL_AFSEL2_Pos);
+        GPIOA->AFR[0] |= (7U << GPIO_AFRL_AFSEL3_Pos);
+
+        /* PCLK1=16 MHz, 115200 bps, 16배 오버샘플링:
+         * BRR = round(16,000,000 / 115,200) = 139 = 0x008B
+         */
+        USART2->CR1 = 0U;
+        USART2->BRR = 139U;
+
+        /* USART2, 송신기, 수신기 활성화 */
+        USART2->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
+
     }
 
   int main(void)
