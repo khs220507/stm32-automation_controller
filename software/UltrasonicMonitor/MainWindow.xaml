@@ -1,0 +1,120 @@
+<Window x:Class="UltrasonicMonitor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="STM32 초음파 센서 모니터"
+        Width="1100" Height="720" MinWidth="900" MinHeight="620"
+        Background="#F3F6F8" Closing="Window_Closing">
+    <Window.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#D8E0E5" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="18" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="Margin" Value="4,0" />
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Malgun Gothic" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="0,0,0,16">
+            <StackPanel DockPanel.Dock="Left">
+                <TextBlock FontSize="25" FontWeight="SemiBold" Text="STM32 초음파 센서 모니터" />
+                <TextBlock Margin="0,4,0,0" Foreground="#5F6B73"
+                           Text="NUCLEO-F401RE · USART2 · 115200 8-N-1 · ASCII CRLF" />
+            </StackPanel>
+            <Border DockPanel.Dock="Right" Padding="12,6" CornerRadius="14" Background="#E7EEF2">
+                <TextBlock x:Name="ConnectionStatusText" FontWeight="SemiBold" Foreground="#52616B"
+                           Text="연결 안 됨" />
+            </Border>
+        </DockPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0"
+                           FontWeight="SemiBold" Text="COM 포트" />
+                <ComboBox x:Name="PortComboBox" Grid.Column="1" Height="34" VerticalContentAlignment="Center" />
+                <Button Grid.Column="2" Margin="8,0,0,0" Click="RefreshPorts_Click" Content="새로 고침" />
+                <Button x:Name="ConnectButton" Grid.Column="3" Click="Connect_Click" Content="연결" />
+                <Button x:Name="StartButton" Grid.Column="5" Click="StartButton_Click" Content="START" IsEnabled="False" />
+                <Button x:Name="StopButton" Grid.Column="6" Click="StopButton_Click" Content="STOP" IsEnabled="False" />
+                <Button x:Name="StatusButton" Grid.Column="7" Click="StatusButton_Click" Content="GET_STATUS" IsEnabled="False" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Foreground="#687780" Text="시스템 상태" />
+                    <TextBlock x:Name="SystemStateText" Margin="0,8,0,0" FontSize="26" FontWeight="SemiBold" Text="UNKNOWN" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Foreground="#687780" Text="센서 상태" />
+                    <TextBlock x:Name="SensorStatusText" Margin="0,8,0,0" FontSize="26" FontWeight="SemiBold" Text="대기" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="4" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Foreground="#687780" Text="거리" />
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock x:Name="DistanceText" FontSize="26" FontWeight="SemiBold" Text="—" />
+                        <TextBlock Margin="6,7,0,0" Foreground="#687780" Text="cm" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="6" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Foreground="#687780" Text="Echo 펄스폭" />
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock x:Name="PulseText" FontSize="26" FontWeight="SemiBold" Text="—" />
+                        <TextBlock Margin="6,7,0,0" Foreground="#687780" Text="µs" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock DockPanel.Dock="Left" FontSize="16" FontWeight="SemiBold" Text="통신 로그" />
+                    <TextBlock x:Name="LastUpdateText" DockPanel.Dock="Right" Foreground="#687780" Text="수신 없음" />
+                </DockPanel>
+                <ListBox x:Name="LogListBox" Grid.Row="1" BorderThickness="0" Background="#101820"
+                         Foreground="#D9E7EE" FontFamily="Consolas" FontSize="13"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
