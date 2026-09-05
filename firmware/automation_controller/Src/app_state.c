@@ -4,6 +4,7 @@
 
 #include "board_io.h"
 #include "hcsr04.h"
+#include "i2c1.h"
 #include "protocol.h"
 #include "timebase.h"
 #include "uart2.h"
@@ -42,6 +43,7 @@ void app_state_run(void)
     if (current_state == STATE_INIT)
     {
         board_io_init();
+        i2c1_pins_init();
         timebase_init();
         hcsr04_init();
         uart2_init();
