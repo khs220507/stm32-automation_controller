@@ -32,6 +32,10 @@ void i2c1_pins_init(void)
     GPIOB->AFR[1] &= ~((0xFU << 0) | (0xFU << 4));
     GPIOB->AFR[1] |=  (0x4U << 0) | (0x4U << 4);
 
+    /* MODER는 핀당 2비트다. PB8은 비트 17:16, PB9는 비트 19:18이다.
+     * 0x3(2진수 11)으로 각 필드를 지운 뒤 0x2(2진수 10)를 넣는다.
+     * 두 핀을 대체 기능(Alternate Function) 모드로 설정한다.
+     * AFR에서 선택한 AF4를 사용하도록 하며, 다른 핀의 설정은 유지한다. */
     GPIOB->MODER &= ~((0x3U << 16) | (0x3U << 18));
     GPIOB->MODER |=  (0x2U << 16) | (0x2U << 18);
 }
