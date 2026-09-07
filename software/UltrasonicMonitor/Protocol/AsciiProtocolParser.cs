@@ -42,6 +42,29 @@ public static class AsciiProtocolParser
 
         if (fields[0] == "OK")
         {
+            if (fields.Length == 3 && fields[1] == "PING" && fields[2] == "PONG")
+                return new ProtocolMessage(ProtocolMessageKind.Uart, line, Command: "PING");
+
+            if (fields.Length == 5 && fields[1] == "CHECK_HCSR04"
+                && fields[2] is "OK" or "OUT_OF_RANGE" or "TIMEOUT"
+                && TryParseUnsigned(fields[3], out uint distance)
+                && TryParseUnsigned(fields[4], out uint pulse)
+                && (fields[2] == "OK" || distance == 0U)
+                && (fields[2] != "TIMEOUT" || pulse == 0U))
+                return new ProtocolMessage(ProtocolMessageKind.Ultrasonic, line,
+                    Command: "CHECK_HCSR04", SensorStatus: fields[2],
+                    DistanceCentimeters: distance, PulseMicroseconds: pulse);
+
+            if (fields.Length == 3 && fields[1] == "CHECK_MPU6050"
+                && byte.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture,
+                    out byte identity))
+            {
+                // OK는 읽기 성공이다. 기대 식별값과 다르면 센서 확인 성공으로 표시하지 않는다.
+                return new ProtocolMessage(ProtocolMessageKind.Mpu6050, line,
+                    Command: fields[1], SensorStatus: identity == 0x68 ? "OK" : "ID_MISMATCH",
+                    Identity: identity);
+            }
+
             if (fields.Length == 4 && fields[1] == "GET_STATUS" && States.Contains(fields[2]))
             {
                 return new ProtocolMessage(ProtocolMessageKind.CommandSucceeded, line,

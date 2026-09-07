@@ -8,6 +8,8 @@ public enum ProtocolMessageKind
     CommandSucceeded,
     CommandError,
     Ultrasonic,
+    Mpu6050,
+    Uart,
 }
 
 public sealed record ProtocolMessage(
@@ -20,4 +22,5 @@ public sealed record ProtocolMessage(
     string? SensorStatus = null,
     uint? DistanceCentimeters = null,
     uint? PulseMicroseconds = null,
-    string? Description = null);
+    string? Description = null,
+    byte? Identity = null);

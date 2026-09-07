@@ -14,8 +14,16 @@ public partial class MainWindow : Window
     private static readonly TimeSpan InterByteTimeout = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan ResponseTimeout = TimeSpan.FromMilliseconds(500);
     private readonly ObservableCollection<string> _logEntries = [];
+    private readonly ObservableCollection<string> _uartLogEntries = [];
+    private readonly ObservableCollection<string> _mpuLogEntries = [];
+    private readonly ObservableCollection<string> _ultrasonicLogEntries = [];
     private readonly AsciiLineBuffer _lineBuffer = new(maxLineLength: 64);
     private readonly DispatcherTimer _receiveTimeoutTimer;
+    private readonly DispatcherTimer _sensorPollTimer;
+    private bool _ultrasonicRepeating;
+    private bool _mpuRepeating;
+    private bool _mpuTurn;
+    private bool _connected;
     private SerialPort? _serialPort;
     private DateTime _lastByteReceivedUtc;
     private CancellationTokenSource? _responseTimeoutCancellation;
@@ -25,8 +33,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LogListBox.ItemsSource = _logEntries;
+        UartLogListBox.ItemsSource = _uartLogEntries;
+        MpuLogListBox.ItemsSource = _mpuLogEntries;
+        UltrasonicLogListBox.ItemsSource = _ultrasonicLogEntries;
         _receiveTimeoutTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
         _receiveTimeoutTimer.Tick += ReceiveTimeoutTimer_Tick;
+        // 각 센서의 실행 여부는 독립적이며 UART 요청만 번갈아 처리한다.
+        _sensorPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _sensorPollTimer.Tick += (_, _) => RunSensorScheduler();
         RefreshPorts();
         AppendLog("INFO", "앱 준비 완료. NUCLEO의 ST-LINK Virtual COM Port를 선택하세요.");
     }
@@ -91,6 +105,7 @@ public partial class MainWindow : Window
 
     private void Disconnect()
     {
+        StopUltrasonic();
         CancelPendingCommand();
         _receiveTimeoutTimer.Stop();
         _lineBuffer.Reset();
@@ -116,45 +131,169 @@ public partial class MainWindow : Window
 
     private void SetConnectionState(bool connected, string? portName)
     {
+        _connected = connected;
         ConnectionStatusText.Text = connected ? $"{portName} 연결됨" : "연결 안 됨";
         ConnectionStatusText.Foreground = new SolidColorBrush(connected
             ? Color.FromRgb(29, 125, 79)
             : Color.FromRgb(82, 97, 107));
         ConnectButton.Content = connected ? "연결 해제" : "연결";
         PortComboBox.IsEnabled = !connected;
-        StartButton.IsEnabled = connected;
-        StopButton.IsEnabled = connected;
-        StatusButton.IsEnabled = connected;
+        ResetDiagnosticDisplays(connected ? "확인 전" : "연결 안 됨");
+        UpdateTestButtons();
     }
 
-    private void StartButton_Click(object sender, RoutedEventArgs e) => SendCommand("START");
-    private void StopButton_Click(object sender, RoutedEventArgs e) => SendCommand("STOP");
-    private void StatusButton_Click(object sender, RoutedEventArgs e) => SendCommand("GET_STATUS");
+    private void StartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_connected) return;
+        _ultrasonicRepeating = true;
+        MeasurementModeText.Text = "반복 측정 중";
+        _sensorPollTimer.Start();
+        RunSensorScheduler();
+    }
+    private void StopButton_Click(object sender, RoutedEventArgs e) => StopUltrasonic();
+    private void UartCheckButton_Click(object sender, RoutedEventArgs e) => SendCommand("PING");
+
+    private void MpuStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_connected) return;
+        _mpuRepeating = true;
+        MpuModeText.Text = "반복 확인 중";
+        _sensorPollTimer.Start();
+        RunSensorScheduler();
+    }
+
+    private void MpuStopButton_Click(object sender, RoutedEventArgs e) => StopMpu();
+
+    private void StopMpu()
+    {
+        _mpuRepeating = false;
+        if (!_ultrasonicRepeating) _sensorPollTimer.Stop();
+        MpuModeText.Text = _pendingCommand == "CHECK_MPU6050"
+            ? "정지 요청 · 현재 1회 응답 대기" : "정지";
+        UpdateTestButtons();
+    }
+
+    private string? NextSensorCommand()
+    {
+        if (!_connected || _pendingCommand is not null) return null;
+        if (_mpuRepeating && (!_ultrasonicRepeating || _mpuTurn))
+        {
+            _mpuTurn = false;
+            return "CHECK_MPU6050";
+        }
+        if (_ultrasonicRepeating)
+        {
+            _mpuTurn = true;
+            return "CHECK_HCSR04";
+        }
+        return null;
+    }
+
+    private void RunSensorScheduler()
+    {
+        string? command = NextSensorCommand();
+        if (command is not null) SendCommand(command);
+        UpdateTestButtons();
+    }
+
+    private void StopUltrasonic()
+    {
+        _ultrasonicRepeating = false;
+        if (!_mpuRepeating) _sensorPollTimer.Stop();
+        MeasurementModeText.Text = _pendingCommand == "CHECK_HCSR04"
+            ? "정지 요청 · 현재 1회 응답 대기" : "정지";
+        UpdateTestButtons();
+    }
+
+    private void UpdateTestButtons()
+    {
+        bool available = _connected && _pendingCommand is null;
+        UartCheckButton.IsEnabled = available;
+        StartButton.IsEnabled = _connected && !_ultrasonicRepeating;
+        MpuStartButton.IsEnabled = _connected && !_mpuRepeating;
+        MpuStopButton.IsEnabled = _connected && _mpuRepeating;
+        StopButton.IsEnabled = _connected && _ultrasonicRepeating;
+    }
+
+    private void ResetDiagnosticDisplays(string status)
+    {
+        StopUltrasonic();
+        StopMpu();
+        SetMpuDisplay(status);
+        SetUartDisplay(status);
+        SetUltrasonicStatus(status);
+        MpuLastCheckText.Text = UartLastCheckText.Text = SensorLastCheckText.Text = "확인 이력 없음";
+    }
+
+    private void BeginCommandDisplay(string command)
+    {
+        if (command == "CHECK_MPU6050")
+        {
+            SetMpuDisplay("확인 중…");
+            MpuLastCheckText.Text = "응답 대기 중";
+        }
+        else if (command == "PING")
+        {
+            SetUartDisplay("확인 중…");
+            UartLastCheckText.Text = "응답 대기 중";
+        }
+        else if (command == "CHECK_HCSR04")
+        {
+            SetUltrasonicStatus("측정 중…");
+            SensorLastCheckText.Text = "응답 대기 중";
+        }
+        UpdateTestButtons();
+    }
+
+    private void ShowCommandFailure(string command, string reason)
+    {
+        string timestamp = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
+        switch (command)
+        {
+            case "PING":
+                SetUartDisplay(reason, failed: true);
+                UartLastCheckText.Text = timestamp;
+                break;
+            case "CHECK_MPU6050":
+                StopMpu();
+                SetMpuDisplay(reason, failed: true);
+                MpuLastCheckText.Text = timestamp;
+                break;
+            case "CHECK_HCSR04":
+                StopUltrasonic();
+                SetUltrasonicStatus(reason, failed: true);
+                SensorLastCheckText.Text = timestamp;
+                break;
+        }
+    }
 
     private void SendCommand(string command)
     {
         if (_serialPort?.IsOpen != true)
         {
-            AppendLog("ERROR", "COM 포트가 연결되지 않았습니다.");
+            AppendLog("ERROR", "COM 포트가 연결되지 않았습니다.", command);
+            ShowCommandFailure(command, "COM 포트 연결을 확인하세요");
             return;
         }
         if (_pendingCommand is not null)
         {
-            AppendLog("WARN", $"{_pendingCommand} 응답 대기 중이므로 {command} 송신을 보류했습니다.");
+            AppendLog("WARN", $"{_pendingCommand} 응답 대기 중이므로 {command} 송신을 보류했습니다.", command);
             return;
         }
 
         try
         {
             _serialPort.Write(command + "\r\n");
-            AppendLog("TX", command + "<CR><LF>");
+            AppendLog("TX", command + "<CR><LF>", command);
             _pendingCommand = command;
+            BeginCommandDisplay(command);
             _responseTimeoutCancellation = new CancellationTokenSource();
             _ = WaitForResponseTimeoutAsync(command, _responseTimeoutCancellation.Token);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {
-            AppendLog("ERROR", $"송신 실패: {exception.Message}");
+            AppendLog("ERROR", $"송신 실패: {exception.Message}", command);
+            ShowCommandFailure(command, "명령 송신 실패");
             CancelPendingCommand();
         }
     }
@@ -166,7 +305,8 @@ public partial class MainWindow : Window
 
         if (_pendingCommand == command)
         {
-            AppendLog("TIMEOUT", $"{command} 응답이 500 ms 안에 도착하지 않았습니다.");
+            AppendLog("TIMEOUT", $"{command} 응답이 500 ms 안에 도착하지 않았습니다.", command);
+            ShowCommandFailure(command, "보드 응답 없음 (500 ms)");
             CancelPendingCommand();
         }
     }
@@ -177,10 +317,13 @@ public partial class MainWindow : Window
         {
             string chunk = ((SerialPort)sender).ReadExisting();
             if (chunk.Length == 0) return;
-            _lastByteReceivedUtc = DateTime.UtcNow;
-            LineBufferResult result = _lineBuffer.Append(chunk);
+            DateTime receivedUtc = DateTime.UtcNow;
             Dispatcher.InvokeAsync(() =>
             {
+                // 이전 연결에서 큐에 남은 수신으로 새 연결의 진단 결과를 덮어쓰지 않는다.
+                if (!ReferenceEquals(sender, _serialPort)) return;
+                _lastByteReceivedUtc = receivedUtc;
+                LineBufferResult result = _lineBuffer.Append(chunk);
                 _receiveTimeoutTimer.Start();
                 for (int index = 0; index < result.OverflowCount; index++)
                     AppendLog("RX-ERROR", "64바이트를 초과한 라인을 폐기했습니다.");
@@ -211,40 +354,67 @@ public partial class MainWindow : Window
         }
     }
 
+    // 수신 흐름: 한 줄 해석 → 로그 기록 → 요청 일치 확인 → 화면 갱신 → 대기 해제.
     private void HandleReceivedLine(string line)
     {
-        AppendLog("RX", line + "<CR><LF>");
         ProtocolMessage message = AsciiProtocolParser.Parse(line);
+        string? logCommand = message.Kind == ProtocolMessageKind.Ultrasonic
+            ? "CHECK_HCSR04" : message.Command;
+        AppendLog("RX", line + "<CR><LF>", logCommand);
+
+        // READY/FAULT는 요청 응답이 아니라 보드가 보내는 상태 알림이다.
+        if (message.Kind == ProtocolMessageKind.Ready || message.State == "FAULT")
+        {
+            CancelPendingCommand();
+            ResetDiagnosticDisplays(message.Kind == ProtocolMessageKind.Ready
+                ? "보드 재시작 · 다시 확인하세요" : "보드 고장 상태 · 다시 확인하세요");
+            return;
+        }
+        if (message.Kind == ProtocolMessageKind.Unknown)
+        {
+            AppendLog("PARSE", message.Description ?? "알 수 없는 메시지 형식입니다.");
+            return;
+        }
+        if (message.Kind == ProtocolMessageKind.CommandError)
+            AppendLog("MCU-ERR", $"{message.Command}: {message.ErrorCode}", message.Command);
+
+        // 늦게 도착한 응답·이전 자동운전 출력은 로그에만 남긴다.
+        if (_pendingCommand is null || message.Command != _pendingCommand) return;
+
         switch (message.Kind)
         {
-            case ProtocolMessageKind.Ready:
-                SystemStateText.Text = "IDLE";
-                break;
-            case ProtocolMessageKind.State:
-            case ProtocolMessageKind.CommandSucceeded:
-                if (message.State is not null) SystemStateText.Text = message.State;
-                CompletePendingCommand(message);
-                break;
             case ProtocolMessageKind.CommandError:
-                AppendLog("MCU-ERR", $"{message.Command}: {message.ErrorCode}");
-                CompletePendingCommand(message);
+                if (message.Command == "CHECK_MPU6050") UpdateMpuDisplay(message);
+                else ShowCommandFailure(_pendingCommand, $"시험 오류: {message.ErrorCode}");
+                break;
+            case ProtocolMessageKind.Mpu6050:
+                UpdateMpuDisplay(message);
+                break;
+            case ProtocolMessageKind.Uart:
+                SetUartDisplay("요청·응답 확인됨 (PONG)", succeeded: true);
+                UartLastCheckText.Text = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
                 break;
             case ProtocolMessageKind.Ultrasonic:
                 UpdateUltrasonicDisplay(message);
                 break;
-            case ProtocolMessageKind.Unknown:
-                AppendLog("PARSE", message.Description ?? "알 수 없는 메시지 형식입니다.");
-                break;
+            default:
+                return;
         }
+        CancelPendingCommand();
     }
-
     private void UpdateUltrasonicDisplay(ProtocolMessage message)
     {
-        SensorStatusText.Text = message.SensorStatus ?? "UNKNOWN";
+        SensorStatusText.Text = message.SensorStatus switch
+        {
+            "OK" => "측정 성공",
+            "TIMEOUT" => "센서 응답 시간 초과",
+            "OUT_OF_RANGE" => "측정 범위 밖",
+            _ => "알 수 없는 결과",
+        };
         PulseText.Text = message.PulseMicroseconds?.ToString() ?? "—";
         DistanceText.Text = message.SensorStatus == "OK" && message.DistanceCentimeters is not null
             ? message.DistanceCentimeters.Value.ToString() : "—";
-        LastUpdateText.Text = $"마지막 센서 수신: {DateTime.Now:HH:mm:ss.fff}";
+        SensorLastCheckText.Text = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
         SensorStatusText.Foreground = new SolidColorBrush(message.SensorStatus switch
         {
             "OK" => Color.FromRgb(29, 125, 79),
@@ -253,13 +423,52 @@ public partial class MainWindow : Window
         });
     }
 
-    private void CompletePendingCommand(ProtocolMessage message)
+    private void SetUartDisplay(string status, bool failed = false, bool succeeded = false)
     {
-        if (_pendingCommand is null) return;
-        bool matches = string.Equals(message.Command, _pendingCommand, StringComparison.Ordinal)
-            || (_pendingCommand == "START" && message.State == "AUTO")
-            || (_pendingCommand == "STOP" && message.State == "STOP");
-        if (matches) CancelPendingCommand();
+        UartStatusText.Text = status;
+        UartStatusText.Foreground = new SolidColorBrush(failed ? Color.FromRgb(183, 50, 50)
+            : succeeded ? Color.FromRgb(29, 125, 79) : Color.FromRgb(82, 97, 107));
+    }
+
+    private void SetUltrasonicStatus(string status, bool failed = false)
+    {
+        SensorStatusText.Text = status;
+        DistanceText.Text = PulseText.Text = "—";
+        SensorStatusText.Foreground = new SolidColorBrush(failed
+            ? Color.FromRgb(183, 50, 50) : Color.FromRgb(82, 97, 107));
+    }
+
+    private void SetMpuDisplay(string status, byte? identity = null, bool failed = false)
+    {
+        MpuStatusText.Text = status;
+        MpuIdentityText.Text = identity is byte value
+            ? $"식별값: 0x{value:X2} · 기대값: 0x68" : "식별값: — · 기대값: 0x68";
+        MpuStatusText.Foreground = new SolidColorBrush(failed
+            ? Color.FromRgb(183, 50, 50)
+            : identity == 0x68 ? Color.FromRgb(29, 125, 79) : Color.FromRgb(82, 97, 107));
+    }
+
+    private void UpdateMpuDisplay(ProtocolMessage message)
+    {
+        string status = message.SensorStatus switch
+        {
+            "OK" => "MPU6050 확인됨",
+            "ID_MISMATCH" => "식별값 불일치 · 센서 종류를 확인하세요",
+            _ => message.ErrorCode switch
+            {
+                "NACK" => "센서 ACK 응답 없음 · 전원·배선·주소를 확인하세요",
+                "BUS_BUSY" => "I2C 버스 사용 중 · SDA/SCL 배선을 확인하세요",
+                "TIMEOUT" => "센서 통신 시간 초과",
+                "BUS_ERROR" => "I2C 버스 오류",
+                "ARBITRATION_LOST" => "I2C 버스 중재 상실",
+                "OVERRUN" => "I2C 데이터 처리 오류",
+                "NOT_READY" => "I2C 또는 타이머 초기화 상태를 확인하세요",
+                "INVALID_STATE" => "자동운전을 정지한 뒤 시험하세요",
+                _ => $"진단 오류: {message.ErrorCode ?? "UNKNOWN"}",
+            },
+        };
+        SetMpuDisplay(status, message.Identity, failed: message.SensorStatus != "OK");
+        MpuLastCheckText.Text = $"마지막 확인: {DateTime.Now:HH:mm:ss.fff}";
     }
 
     private void CancelPendingCommand()
@@ -268,13 +477,23 @@ public partial class MainWindow : Window
         _responseTimeoutCancellation?.Dispose();
         _responseTimeoutCancellation = null;
         _pendingCommand = null;
+        if (!_ultrasonicRepeating) MeasurementModeText.Text = "정지";
+        if (!_mpuRepeating) MpuModeText.Text = "정지";
+        UpdateTestButtons();
     }
 
-    private void AppendLog(string direction, string text)
+    private void AppendLog(string direction, string text, string? command = null)
     {
-        _logEntries.Add($"{DateTime.Now:HH:mm:ss.fff} [{direction,-8}] {text}");
-        while (_logEntries.Count > 500) _logEntries.RemoveAt(0);
-        if (_logEntries.Count > 0) LogListBox.ScrollIntoView(_logEntries[^1]);
+        var (entries, listBox) = command switch
+        {
+            "PING" => (_uartLogEntries, UartLogListBox),
+            "CHECK_MPU6050" => (_mpuLogEntries, MpuLogListBox),
+            "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
+            _ => (_logEntries, LogListBox),
+        };
+        entries.Add($"{DateTime.Now:HH:mm:ss.fff} [{direction,-8}] {text}");
+        while (entries.Count > 500) entries.RemoveAt(0);
+        listBox.ScrollIntoView(entries[^1]);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => Disconnect();
