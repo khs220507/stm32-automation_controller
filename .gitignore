@@ -1,0 +1,25 @@
+# OS and editor temporary files
+Thumbs.db
+.DS_Store
+*~
+
+# KiCad local state, locks, and automatic backups
+*.kicad_prl
+*.lck
+_autosave-*
+*-backups/
+
+# Firmware and software build outputs
+firmware/build/
+software/build/
+software/**/bin/
+software/**/obj/
+software/.venv/
+__pycache__/
+*.pyc
+firmware/.metadata/
+firmware/automation_controller/Debug/
+
+# Microsoft Office lock files
+~$*.docx
+~$*.xlsx
