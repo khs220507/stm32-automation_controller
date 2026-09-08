@@ -40,6 +40,7 @@ static void i2c1_clear_address(void)
 
 static void i2c1_abort(void)
 {
+    /* 1. 현재 상태와 리셋 후 복원할 설정을 저장한다. */
     uint32_t start = timebase_now_us();
     uint32_t status = I2C1->SR1;
     uint32_t bus_status = I2C1->SR2;
@@ -47,12 +48,12 @@ static void i2c1_abort(void)
     uint32_t clock_control = I2C1->CCR;
     uint32_t rise_time = I2C1->TRISE;
 
-    /* SR1 bit 9(ARLO)이 없고 SR2 bit 0(MSL)=1인 경우에만 STOP을 요청한다.
-     * CR1 bit 9=STOP. 중재 상실 시 다른 컨트롤러의 전송에 STOP을 넣지 않는다. */
+    /* 2. 버스 제어권이 있을 때 STOP을 요청한다.
+     * SR1 bit 9(ARLO)=0, SR2 bit 0(MSL)=1 확인. CR1 bit 9=STOP. */
     if (((status & (0x1U << 9)) == 0U) && ((bus_status & (0x1U << 0)) != 0U))
     {
         I2C1->CR1 |= (0x1U << 9);
-        /* CR1 bit 9(STOP), SR2 bit 1(BUSY)이 해제될 때까지 유한 대기한다. */
+        /* 3. STOP(bit 9)과 BUSY(bit 1) 해제를 기다린다. 정리 시작부터 최대 1 ms. */
         while (((I2C1->CR1 & (0x1U << 9)) != 0U) ||
                ((I2C1->SR2 & (0x1U << 1)) != 0U))
         {
@@ -60,10 +61,11 @@ static void i2c1_abort(void)
         }
     }
 
-    /* APB1RSTR bit 21(I2C1RST)로 내부 전송 상태/오류를 리셋하고 타이밍 복원.
-     * 외부 장치가 SDA/SCL을 LOW로 잡는 고장은 이 리셋으로 복구되지 않는다. */
+    /* 4. APB1RSTR bit 21(I2C1RST)로 I2C1 내부 상태를 리셋한다.
+     * 외부 장치가 SDA/SCL을 LOW로 잡는 고장은 복구하지 못한다. */
     RCC->APB1RSTR |= (0x1U << 21);
     RCC->APB1RSTR &= ~(0x1U << 21);
+    /* 5. 저장한 설정을 복원하고 I2C1을 다시 켠다. */
     I2C1->CR2 = frequency;
     I2C1->CCR = clock_control;
     I2C1->TRISE = rise_time;
