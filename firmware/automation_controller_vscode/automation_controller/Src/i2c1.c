@@ -155,6 +155,69 @@ failed:
     return result;
 }
 
+i2c1_result_t i2c1_write_register(uint8_t address, uint8_t reg,
+                                uint8_t value, uint32_t timeout_us)
+{
+    uint32_t start;
+    i2c1_result_t result;
+
+    /* 1. 인수와 초기화 상태를 확인한다. 읽기 함수와 같은 전제다. */
+    if ((address > 0x7FU) || (timeout_us == 0U) || (timeout_us > 0x7FFFFFFFU))
+        return I2C1_RESULT_INVALID_ARGUMENT;
+    /* APB1ENR bit 3=TIM5EN, TIM5 CR1 bit 0=CEN, I2C CR1 bit 0=PE. */
+    if (!i2c1_initialized || ((RCC->APB1ENR & (0x1U << 3)) == 0U) ||
+        ((TIM5->CR1 & (0x1U << 0)) == 0U) || ((I2C1->CR1 & (0x1U << 0)) == 0U))
+        return I2C1_RESULT_NOT_READY;
+
+    /* 2. 버스가 비면 START를 요청한다. 전체 과정에 같은 제한시간을 쓴다. */
+    start = timebase_now_us();
+    if (!i2c1_wait_idle(timeout_us)) return I2C1_RESULT_BUS_BUSY;
+    /* SR1 bit 8~11: BERR/ARLO/AF/OVR 이전 오류 해제. */
+    I2C1->SR1 &= ~((0x1U << 8) | (0x1U << 9) | (0x1U << 10) | (0x1U << 11));
+    I2C1->CR1 |= (0x1U << 8); /* CR1 bit 8(START): 시작 요청. */
+    result = i2c1_wait_sr1((0x1U << 0), start, timeout_us); /* SR1 bit 0(SB). */
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    /* 3. 장치 주소 + 쓰기 방향(bit 0=0)을 보내고 ACK를 확인한다. */
+    I2C1->DR = (uint32_t)address << 1;
+    result = i2c1_wait_sr1((0x1U << 1), start, timeout_us); /* SR1 bit 1(ADDR). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    i2c1_clear_address();
+
+    /* 4. 레지스터 주소를 보낸 뒤, 쓸 데이터 한 바이트를 보낸다.
+     * RM0368 Rev 6 p.481~482 Controller transmitter: DR 기록 후 BTF 확인. */
+    result = i2c1_wait_sr1((0x1U << 7), start, timeout_us); /* SR1 bit 7(TxE). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    I2C1->DR = reg;
+    result = i2c1_wait_sr1((0x1U << 2), start, timeout_us); /* SR1 bit 2(BTF). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    I2C1->DR = value;
+    result = i2c1_wait_sr1((0x1U << 2), start, timeout_us); /* SR1 bit 2(BTF). */
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    /* 5. STOP을 요청하고 버스 종료까지 확인한다. */
+    I2C1->CR1 |= (0x1U << 9); /* CR1 bit 9(STOP). */
+    while (((I2C1->CR1 & (0x1U << 9)) != 0U) ||
+           ((I2C1->SR2 & (0x1U << 1)) != 0U)) /* SR2 bit 1(BUSY). */
+    {
+        result = i2c1_check_error();
+        if (result != I2C1_RESULT_OK) goto failed;
+        if (timebase_elapsed_us(start) >= timeout_us)
+        {
+            result = I2C1_RESULT_TIMEOUT;
+            goto failed;
+        }
+    }
+    result = i2c1_check_error();
+    if (result != I2C1_RESULT_OK) goto failed;
+    return I2C1_RESULT_OK;
+
+failed:
+    /* 실패 원인을 유지하며 내부 상태를 정리한다. 자동 재전송은 하지 않는다. */
+    i2c1_abort();
+    return result;
+}
+
 bool i2c1_wait_idle(uint32_t timeout_us)
 {
     uint32_t start_time_us;

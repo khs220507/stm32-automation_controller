@@ -17,13 +17,15 @@ host_timer_t host_timer;
 uint32_t SystemCoreClock = 16000000U;
 const uint8_t APBPrescTable[8] = {0, 0, 0, 0, 1, 2, 3, 4};
 
-enum stage { START, WRITE_ADDRESS, REGISTER, RESTART, READ_ADDRESS, RECEIVE, STOP, DONE };
+enum stage { START, WRITE_ADDRESS, REGISTER, RESTART, READ_ADDRESS, RECEIVE, STOP, DONE, WRITE_DATA };
 static enum stage stage;
 static int stall_stage;
 static int error_stage;
 static uint32_t error_bits;
 static uint32_t now_us, tick_us, ticks, primask, critical_count;
 static uint8_t sensor_id;
+static int write_mode;
+static uint8_t expected_write_value, written_value;
 static int persistent_busy;
 static int safe_output_count;
 static int i2c_init_count, ultrasonic_init_count, ultrasonic_measure_count;
@@ -86,10 +88,16 @@ static void advance_device(void)
         if (I2C1->DR == 0xD0U) I2C1->SR1 = (0x1U << 7); /* SR1 bit 7: TxE. */
         else
         {
-            assert(I2C1->DR == 0x75U);
+            assert(I2C1->DR == (write_mode ? 0x6BU : 0x75U));
             I2C1->SR1 = (0x1U << 2); /* SR1 bit 2: BTF. */
-            stage = RESTART;
+            stage = write_mode ? WRITE_DATA : RESTART;
         }
+        break;
+    case WRITE_DATA:
+        assert(I2C1->DR == expected_write_value);
+        written_value = (uint8_t)I2C1->DR;
+        I2C1->SR1 = (0x1U << 2); /* SR1 bit 2(BTF): 데이터 ACK 후 완료. */
+        stage = STOP;
         break;
     case READ_ADDRESS:
         assert(I2C1->DR == 0xD1U);
@@ -162,6 +170,8 @@ static void reset_device(void)
     now_us = ticks = primask = critical_count = 0U;
     tick_us = 10U;
     sensor_id = 0x68U;
+    write_mode = 0;
+    expected_write_value = written_value = 0U;
     persistent_busy = safe_output_count = 0;
     i2c_init_count = ultrasonic_init_count = ultrasonic_measure_count = 0;
     simulated_ultrasonic = (hcsr04_measurement_t){ HCSR04_STATUS_TIMEOUT, 0U, 0U };
@@ -192,6 +202,66 @@ int main(void)
 {
     uint8_t value;
     setvbuf(stdout, NULL, _IONBF, 0);
+    /* 쓰기 전송: 주소/레지스터/데이터 순서, 래핑, 오류와 유한 대기를 확인한다.
+     * 0x6B는 전송 시험용 주소이며 실제 센서 설정 적용 시험이 아니다. */
+    const uint8_t write_values[] = { 0x00U, 0x01U, 0x6BU, 0xD0U, 0xFFU };
+    for (unsigned i = 0; i < sizeof(write_values); i++)
+    {
+        reset_device();
+        write_mode = 1;
+        expected_write_value = write_values[i];
+        now_us = 0xFFFFFFD0U;
+        primask = i & 1U;
+        assert(i2c1_write_register(0x68U, 0x6BU, expected_write_value, 200U) == I2C1_RESULT_OK);
+        assert(stage == DONE && written_value == expected_write_value);
+        assert(critical_count == 0U && primask == (i & 1U));
+    }
+    const int write_phases[] = { START, WRITE_ADDRESS, REGISTER, WRITE_DATA, STOP };
+    for (unsigned i = 0; i < sizeof(write_phases) / sizeof(write_phases[0]); i++)
+    {
+        reset_device();
+        write_mode = 1;
+        stall_stage = write_phases[i];
+        assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == I2C1_RESULT_TIMEOUT);
+        assert(now_us <= 1200U);
+        assert(I2C1->CR2 == 16U && I2C1->CCR == 80U && I2C1->TRISE == 17U);
+        assert(I2C1->CR1 == (0x1U << 0)); /* CR1 bit 0(PE): 리셋 후 활성화. */
+    }
+    for (int bit = 8; bit <= 11; bit++) /* SR1 bit 8=BERR, 9=ARLO, 10=AF, 11=OVR. */
+    {
+        const i2c1_result_t expected[] = { I2C1_RESULT_BUS_ERROR,
+            I2C1_RESULT_ARBITRATION_LOST, I2C1_RESULT_NACK, I2C1_RESULT_OVERRUN };
+        for (unsigned phase = 1; phase <= 3; phase++)
+        {
+            reset_device();
+            write_mode = 1;
+            error_stage = write_phases[phase];
+            error_bits = 0x1U << bit;
+            assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == expected[bit - 8]);
+            assert(now_us <= 1200U);
+            /* 같은 드라이버로 다음 쓰기를 다시 수행할 수 있는지 확인. */
+            /* 가짜 레지스터는 RCC 리셋에 반응하지 않으므로 리셋 결과를 모의한다.
+             * 외부 버스도 해제된 조건이며, 실제 리셋 동작 검증은 아니다. */
+            I2C1->SR1 = I2C1->SR2 = 0U;
+            stage = START;
+            assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == I2C1_RESULT_OK);
+        }
+    }
+    reset_device();
+    assert(i2c1_write_register(0x80U, 0x6BU, 0U, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
+    assert(i2c1_write_register(0x68U, 0x6BU, 0U, 0U) == I2C1_RESULT_INVALID_ARGUMENT);
+    assert(i2c1_write_register(0x68U, 0x6BU, 0U, 0x80000000U) == I2C1_RESULT_INVALID_ARGUMENT);
+    TIM5->CR1 = 0U;
+    assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == I2C1_RESULT_NOT_READY);
+    reset_device();
+    persistent_busy = 1;
+    I2C1->SR2 = (0x1U << 1); /* SR2 bit 1(BUSY): 버스 점유 지속. */
+    assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == I2C1_RESULT_BUS_BUSY);
+    reset_device();
+    write_mode = 1;
+    tick_us = 40U;
+    assert(i2c1_write_register(0x68U, 0x6BU, 0U, 200U) == I2C1_RESULT_TIMEOUT);
+    puts("PASS: write bytes, deadline/wrap, errors/retry, busy and invalid arguments");
     reset_device();
     assert(i2c1_read_register(0x68U, 0x75U, NULL, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
     assert(i2c1_read_register(0x80U, 0x75U, &value, 200U) == I2C1_RESULT_INVALID_ARGUMENT);

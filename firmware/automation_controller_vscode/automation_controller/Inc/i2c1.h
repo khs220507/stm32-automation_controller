@@ -36,6 +36,12 @@ bool i2c1_wait_idle(uint32_t timeout_us);
 i2c1_result_t i2c1_read_register(uint8_t address, uint8_t reg,
                                uint8_t *value, uint32_t timeout_us);
 
+/* 위 읽기 함수와 같은 초기화/동시성/시간 제한 조건으로 1바이트를 쓴다.
+ * OK는 버스 전송 성공이며 센서 설정 적용 여부는 별도 읽기로 확인한다.
+ * 실패해도 센서가 이미 값을 받았을 수 있으므로 자동 재시도하지 않는다. */
+i2c1_result_t i2c1_write_register(uint8_t address, uint8_t reg,
+                                uint8_t value, uint32_t timeout_us);
+
 /* Configure PB8/PB9 as the I2C1 SCL/SDA alternate-function pins. */
 void i2c1_pins_init(void);
 
