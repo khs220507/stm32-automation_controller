@@ -42,6 +42,15 @@ public static class AsciiProtocolParser
 
         if (fields[0] == "OK")
         {
+            if (fields.Length == 4 && fields[1] == "WAKE_MPU6050"
+                && byte.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out byte before)
+                && byte.TryParse(fields[3], NumberStyles.None, CultureInfo.InvariantCulture, out byte after))
+                return new ProtocolMessage(ProtocolMessageKind.Mpu6050Wake, line,
+                    Command: fields[1],
+                    SensorStatus: (before & 0x80) == 0 && after == (before & ~0x40)
+                        ? "OK" : "VERIFY_FAILED",
+                    PowerBefore: before, PowerAfter: after);
+
             if (fields.Length == 3 && fields[1] == "PING" && fields[2] == "PONG")
                 return new ProtocolMessage(ProtocolMessageKind.Uart, line, Command: "PING");
 

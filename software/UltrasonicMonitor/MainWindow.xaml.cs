@@ -163,6 +163,7 @@ public partial class MainWindow : Window
     }
 
     private void MpuStopButton_Click(object sender, RoutedEventArgs e) => StopMpu();
+    private void MpuWakeButton_Click(object sender, RoutedEventArgs e) => SendCommand("WAKE_MPU6050");
 
     private void StopMpu()
     {
@@ -209,6 +210,7 @@ public partial class MainWindow : Window
     {
         bool available = _connected && _pendingCommand is null;
         UartCheckButton.IsEnabled = available;
+        MpuWakeButton.IsEnabled = available;
         StartButton.IsEnabled = _connected && !_ultrasonicRepeating;
         MpuStartButton.IsEnabled = _connected && !_mpuRepeating;
         MpuStopButton.IsEnabled = _connected && _mpuRepeating;
@@ -220,6 +222,8 @@ public partial class MainWindow : Window
         StopUltrasonic();
         StopMpu();
         SetMpuDisplay(status);
+        SetMpuWakeDisplay(status);
+        MpuWakeTimeText.Text = "확인 이력 없음";
         SetUartDisplay(status);
         SetUltrasonicStatus(status);
         MpuLastCheckText.Text = UartLastCheckText.Text = SensorLastCheckText.Text = "확인 이력 없음";
@@ -227,7 +231,12 @@ public partial class MainWindow : Window
 
     private void BeginCommandDisplay(string command)
     {
-        if (command == "CHECK_MPU6050")
+        if (command == "WAKE_MPU6050")
+        {
+            SetMpuWakeDisplay("SLEEP 해제·확인 중…");
+            MpuWakeTimeText.Text = "응답 대기 중";
+        }
+        else if (command == "CHECK_MPU6050")
         {
             SetMpuDisplay("확인 중…");
             MpuLastCheckText.Text = "응답 대기 중";
@@ -250,6 +259,10 @@ public partial class MainWindow : Window
         string timestamp = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
         switch (command)
         {
+            case "WAKE_MPU6050":
+                SetMpuWakeDisplay(reason, failed: true);
+                MpuWakeTimeText.Text = timestamp;
+                break;
             case "PING":
                 SetUartDisplay(reason, failed: true);
                 UartLastCheckText.Text = timestamp;
@@ -385,7 +398,11 @@ public partial class MainWindow : Window
         {
             case ProtocolMessageKind.CommandError:
                 if (message.Command == "CHECK_MPU6050") UpdateMpuDisplay(message);
+                else if (message.Command == "WAKE_MPU6050") UpdateMpuWakeDisplay(message);
                 else ShowCommandFailure(_pendingCommand, $"시험 오류: {message.ErrorCode}");
+                break;
+            case ProtocolMessageKind.Mpu6050Wake:
+                UpdateMpuWakeDisplay(message);
                 break;
             case ProtocolMessageKind.Mpu6050:
                 UpdateMpuDisplay(message);
@@ -471,6 +488,39 @@ public partial class MainWindow : Window
         MpuLastCheckText.Text = $"마지막 확인: {DateTime.Now:HH:mm:ss.fff}";
     }
 
+    private void SetMpuWakeDisplay(string status, byte? before = null, byte? after = null,
+                                   bool failed = false, bool succeeded = false)
+    {
+        MpuWakeStatusText.Text = status;
+        MpuPowerText.Text = before is byte b && after is byte a
+            ? $"변경 전: 0x{b:X2} → 확인값: 0x{a:X2}"
+            : "변경 전: — → 확인값: —";
+        MpuWakeStatusText.Foreground = new SolidColorBrush(failed ? Color.FromRgb(183, 50, 50)
+            : succeeded ? Color.FromRgb(29, 125, 79) : Color.FromRgb(82, 97, 107));
+    }
+
+    private void UpdateMpuWakeDisplay(ProtocolMessage message)
+    {
+        bool succeeded = message.SensorStatus == "OK";
+        string status = succeeded ? "SLEEP=0 확인됨" : (message.ErrorCode ?? message.SensorStatus) switch
+        {
+            "VERIFY_FAILED" => "설정 확인 실패 · 다시 읽은 값이 다릅니다",
+            "SENSOR_RESET" => "센서 리셋 중 · 잠시 후 다시 확인하세요",
+            "INVALID_STATE" => "보드가 대기 상태일 때 실행하세요",
+            "NACK" => "센서 ACK 응답 없음 · 배선을 확인하세요",
+            "BUS_BUSY" => "I2C 버스 사용 중 · 배선을 확인하세요",
+            "TIMEOUT" => "센서 통신 시간 초과 · 적용 여부 미확인",
+            "NOT_READY" => "I2C 또는 타이머 준비 안 됨",
+            "BUS_ERROR" => "I2C 버스 오류",
+            "ARBITRATION_LOST" => "I2C 버스 중재 상실",
+            "OVERRUN" => "I2C 데이터 처리 오류",
+            _ => $"설정 확인 오류: {message.ErrorCode ?? message.SensorStatus ?? "UNKNOWN"}",
+        };
+        SetMpuWakeDisplay(status, message.PowerBefore, message.PowerAfter,
+            failed: !succeeded, succeeded: succeeded);
+        MpuWakeTimeText.Text = $"마지막 확인: {DateTime.Now:HH:mm:ss.fff}";
+    }
+
     private void CancelPendingCommand()
     {
         _responseTimeoutCancellation?.Cancel();
@@ -487,7 +537,7 @@ public partial class MainWindow : Window
         var (entries, listBox) = command switch
         {
             "PING" => (_uartLogEntries, UartLogListBox),
-            "CHECK_MPU6050" => (_mpuLogEntries, MpuLogListBox),
+            "CHECK_MPU6050" or "WAKE_MPU6050" => (_mpuLogEntries, MpuLogListBox),
             "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
             _ => (_logEntries, LogListBox),
         };

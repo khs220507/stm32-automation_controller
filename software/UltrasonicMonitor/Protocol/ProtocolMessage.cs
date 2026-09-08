@@ -10,6 +10,7 @@ public enum ProtocolMessageKind
     Ultrasonic,
     Mpu6050,
     Uart,
+    Mpu6050Wake,
 }
 
 public sealed record ProtocolMessage(
@@ -23,4 +24,6 @@ public sealed record ProtocolMessage(
     uint? DistanceCentimeters = null,
     uint? PulseMicroseconds = null,
     string? Description = null,
-    byte? Identity = null);
+    byte? Identity = null,
+    byte? PowerBefore = null,
+    byte? PowerAfter = null);
