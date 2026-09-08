@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.IO.Ports;
 using System.Text;
@@ -22,6 +23,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _sensorPollTimer;
     private bool _ultrasonicRepeating;
     private bool _mpuRepeating;
+    private bool _accelRepeating;
+    private bool _accelNeedsConfiguration;
     private bool _mpuTurn;
     private bool _connected;
     private SerialPort? _serialPort;
@@ -157,6 +160,7 @@ public partial class MainWindow : Window
     private void MpuStartButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_connected) return;
+        StopAccel();
         _mpuRepeating = true;
         MpuModeText.Text = "반복 확인 중";
         _sensorPollTimer.Start();
@@ -164,12 +168,41 @@ public partial class MainWindow : Window
     }
 
     private void MpuStopButton_Click(object sender, RoutedEventArgs e) => StopMpu();
-    private void MpuWakeButton_Click(object sender, RoutedEventArgs e) => SendCommand("WAKE_MPU6050");
+    private void MpuWakeButton_Click(object sender, RoutedEventArgs e)
+    {
+        StopAccel();
+        SendCommand("WAKE_MPU6050");
+    }
+
+    private void AccelStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_connected || _pendingCommand is not null) return;
+        StopMpu();
+        _accelRepeating = true;
+        _accelNeedsConfiguration = true;
+        AccelModeText.Text = "반복 측정 중";
+        ClearAccelDisplay("센서 설정 준비 중…");
+        _mpuTurn = true;
+        _sensorPollTimer.Start();
+        RunSensorScheduler();
+    }
+
+    private void AccelStopButton_Click(object sender, RoutedEventArgs e) => StopAccel();
+
+    private void StopAccel()
+    {
+        _accelRepeating = false;
+        _accelNeedsConfiguration = true;
+        if (!_ultrasonicRepeating && !_mpuRepeating) _sensorPollTimer.Stop();
+        AccelModeText.Text = _pendingCommand is "CONFIG_ACCEL" or "READ_ACCEL"
+            ? "정지 요청 · 현재 1회 응답 대기" : "정지 · 마지막 값 보관";
+        UpdateTestButtons();
+    }
 
     private void StopMpu()
     {
         _mpuRepeating = false;
-        if (!_ultrasonicRepeating) _sensorPollTimer.Stop();
+        if (!_ultrasonicRepeating && !_accelRepeating) _sensorPollTimer.Stop();
         MpuModeText.Text = _pendingCommand == "CHECK_MPU6050"
             ? "정지 요청 · 현재 1회 응답 대기" : "정지";
         UpdateTestButtons();
@@ -178,10 +211,10 @@ public partial class MainWindow : Window
     private string? NextSensorCommand()
     {
         if (!_connected || _pendingCommand is not null) return null;
-        if (_mpuRepeating && (!_ultrasonicRepeating || _mpuTurn))
+        if ((_mpuRepeating || _accelRepeating) && (!_ultrasonicRepeating || _mpuTurn))
         {
             _mpuTurn = false;
-            return "CHECK_MPU6050";
+            return _accelRepeating ? (_accelNeedsConfiguration ? "CONFIG_ACCEL" : "READ_ACCEL") : "CHECK_MPU6050";
         }
         if (_ultrasonicRepeating)
         {
@@ -201,7 +234,7 @@ public partial class MainWindow : Window
     private void StopUltrasonic()
     {
         _ultrasonicRepeating = false;
-        if (!_mpuRepeating) _sensorPollTimer.Stop();
+        if (!_mpuRepeating && !_accelRepeating) _sensorPollTimer.Stop();
         MeasurementModeText.Text = _pendingCommand == "CHECK_HCSR04"
             ? "정지 요청 · 현재 1회 응답 대기" : "정지";
         UpdateTestButtons();
@@ -212,6 +245,8 @@ public partial class MainWindow : Window
         bool available = _connected && _pendingCommand is null;
         UartCheckButton.IsEnabled = available;
         MpuWakeButton.IsEnabled = available;
+        AccelStartButton.IsEnabled = available && !_accelRepeating;
+        AccelStopButton.IsEnabled = _connected && _accelRepeating;
         StartButton.IsEnabled = _connected && !_ultrasonicRepeating;
         MpuStartButton.IsEnabled = _connected && !_mpuRepeating;
         MpuStopButton.IsEnabled = _connected && _mpuRepeating;
@@ -220,6 +255,10 @@ public partial class MainWindow : Window
 
     private void ResetDiagnosticDisplays(string status)
     {
+        StopAccel();
+        ClearAccelDisplay(status);
+        AccelTimeText.Text = "측정 이력 없음";
+        AccelModeText.Text = "정지";
         StopUltrasonic();
         StopMpu();
         SetMpuDisplay(status);
@@ -232,6 +271,8 @@ public partial class MainWindow : Window
 
     private void BeginCommandDisplay(string command)
     {
+        if (command is "CONFIG_ACCEL" or "READ_ACCEL")
+            AccelStatusText.Text = command == "CONFIG_ACCEL" ? "±2g 설정·확인 중…" : "새 측정값 대기 중…";
         if (command == "WAKE_MPU6050")
         {
             SetMpuWakeDisplay("SLEEP 해제·확인 중…");
@@ -260,6 +301,12 @@ public partial class MainWindow : Window
         string timestamp = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
         switch (command)
         {
+            case "CONFIG_ACCEL":
+            case "READ_ACCEL":
+                StopAccel();
+                ClearAccelDisplay(reason, failed: true);
+                AccelTimeText.Text = timestamp;
+                break;
             case "WAKE_MPU6050":
                 SetMpuWakeDisplay(reason, failed: true);
                 MpuWakeTimeText.Text = timestamp;
@@ -398,9 +445,18 @@ public partial class MainWindow : Window
         switch (message.Kind)
         {
             case ProtocolMessageKind.CommandError:
-                if (message.Command == "CHECK_MPU6050") UpdateMpuDisplay(message);
+                if (message.Command == "READ_ACCEL" && message.ErrorCode == "WARMING_UP")
+                    ClearAccelDisplay("센서 초기 대기 중…");
+                else if (message.Command == "CHECK_MPU6050") UpdateMpuDisplay(message);
                 else if (message.Command == "WAKE_MPU6050") UpdateMpuWakeDisplay(message);
                 else ShowCommandFailure(_pendingCommand, $"시험 오류: {message.ErrorCode}");
+                break;
+            case ProtocolMessageKind.AccelConfigured:
+                _accelNeedsConfiguration = false;
+                ClearAccelDisplay("±2g 설정 확인됨 · 첫 측정 대기");
+                break;
+            case ProtocolMessageKind.Accelerometer:
+                UpdateAccelDisplay(message);
                 break;
             case ProtocolMessageKind.Mpu6050Wake:
                 UpdateMpuWakeDisplay(message);
@@ -532,6 +588,7 @@ public partial class MainWindow : Window
         _pendingCommand = null;
         if (!_ultrasonicRepeating) MeasurementModeText.Text = "정지";
         if (!_mpuRepeating) MpuModeText.Text = "정지";
+        if (!_accelRepeating) AccelModeText.Text = "정지 · 마지막 값 보관";
         UpdateTestButtons();
     }
 
@@ -540,7 +597,7 @@ public partial class MainWindow : Window
         var (entries, listBox) = command switch
         {
             "PING" => (_uartLogEntries, UartLogListBox),
-            "CHECK_MPU6050" or "WAKE_MPU6050" => (_mpuLogEntries, MpuLogListBox),
+            "CHECK_MPU6050" or "WAKE_MPU6050" or "CONFIG_ACCEL" or "READ_ACCEL" => (_mpuLogEntries, MpuLogListBox),
             "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
             _ => (_logEntries, LogListBox),
         };
@@ -550,4 +607,28 @@ public partial class MainWindow : Window
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => Disconnect();
+
+    private void ClearAccelDisplay(string status, bool failed = false)
+    {
+        AccelXText.Text = AccelYText.Text = AccelZText.Text = "— g";
+        AccelXRawText.Text = AccelYRawText.Text = AccelZRawText.Text = "원시값: —";
+        AccelStatusText.Text = status;
+        AccelStatusText.Foreground = new SolidColorBrush(failed
+            ? Color.FromRgb(183, 50, 50) : Color.FromRgb(82, 97, 107));
+    }
+
+    private void UpdateAccelDisplay(ProtocolMessage message)
+    {
+        // MPU6050 ±2g 감도: 16384 LSB/g. MCU는 부호 있는 원시값만 보낸다.
+        static string InG(short? raw) => ((raw ?? 0) / 16384.0).ToString("0.000", CultureInfo.InvariantCulture) + " g";
+        AccelXText.Text = InG(message.AccelX);
+        AccelYText.Text = InG(message.AccelY);
+        AccelZText.Text = InG(message.AccelZ);
+        AccelXRawText.Text = $"원시값: {message.AccelX}";
+        AccelYRawText.Text = $"원시값: {message.AccelY}";
+        AccelZRawText.Text = $"원시값: {message.AccelZ}";
+        AccelStatusText.Text = "측정값 수신됨 · ±2g 환산";
+        AccelStatusText.Foreground = new SolidColorBrush(Color.FromRgb(29, 125, 79));
+        AccelTimeText.Text = $"마지막 수신: {DateTime.Now:HH:mm:ss.fff}";
+    }
 }

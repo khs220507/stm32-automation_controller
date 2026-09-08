@@ -155,6 +155,107 @@ failed:
     return result;
 }
 
+i2c1_result_t i2c1_read_registers(uint8_t address, uint8_t reg,
+                               uint8_t *value, uint8_t count, uint32_t timeout_us)
+{
+    uint32_t start;
+    uint32_t interrupt_mask;
+    uint8_t received[14];
+    uint8_t index = 0U;
+    i2c1_result_t result;
+
+    if ((address > 0x7FU) || (value == NULL) || (count < 3U) || (count > 14U) ||
+        (timeout_us == 0U) || (timeout_us > 0x7FFFFFFFU))
+        return I2C1_RESULT_INVALID_ARGUMENT;
+
+    /* APB1ENR bit 3(TIM5EN), TIM5 CR1 bit 0(CEN), I2C CR1 bit 0(PE).
+     * 초기화 누락으로 정지한 타이머를 사용해 무한 대기하는 것을 방지한다. */
+    if (!i2c1_initialized || ((RCC->APB1ENR & (0x1U << 3)) == 0U) ||
+        ((TIM5->CR1 & (0x1U << 0)) == 0U) || ((I2C1->CR1 & (0x1U << 0)) == 0U))
+        return I2C1_RESULT_NOT_READY;
+
+    start = timebase_now_us();
+    if (!i2c1_wait_idle(timeout_us)) return I2C1_RESULT_BUS_BUSY;
+
+    /* 1. SR1 bit 8~11 오류 해제. CR1 bit 11(POS)=0, bit 10(ACK)=1로 연속 수신 준비. */
+    I2C1->SR1 &= ~((0x1U << 8) | (0x1U << 9) | (0x1U << 10) | (0x1U << 11));
+    I2C1->CR1 &= ~(0x1U << 11);
+    I2C1->CR1 |= (0x1U << 10);
+    I2C1->CR1 |= (0x1U << 8); /* CR1 bit 8(START): 시작 조건 요청. */
+    result = i2c1_wait_sr1((0x1U << 0), start, timeout_us); /* SR1 bit 0(SB). */
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    /* 7비트 주소를 bit 7:1에 배치, bit 0=0은 쓰기 방향이다. */
+    I2C1->DR = (uint32_t)address << 1;
+    result = i2c1_wait_sr1((0x1U << 1), start, timeout_us); /* SR1 bit 1(ADDR). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    i2c1_clear_address();
+    result = i2c1_wait_sr1((0x1U << 7), start, timeout_us); /* SR1 bit 7(TxE). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    I2C1->DR = reg;
+    result = i2c1_wait_sr1((0x1U << 2), start, timeout_us); /* SR1 bit 2(BTF): 전송 완료. */
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    I2C1->CR1 |= (0x1U << 8); /* CR1 bit 8(START): STOP 없이 반복 시작. */
+    result = i2c1_wait_sr1((0x1U << 0), start, timeout_us); /* SR1 bit 0(SB). */
+    if (result != I2C1_RESULT_OK) goto failed;
+    I2C1->DR = ((uint32_t)address << 1) | 0x1U; /* 주소 bit 0=1은 읽기 방향. */
+    result = i2c1_wait_sr1((0x1U << 1), start, timeout_us); /* SR1 bit 1(ADDR). */
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    /* 2. ADDR 해제 후 앞부분을 읽는다. 마지막 3바이트는 아래에서 따로 종료한다.
+     * RM0368 Rev 6 p.483~484, N > 2-byte reception. */
+    i2c1_clear_address();
+    while (index < count - 3U)
+    {
+        result = i2c1_wait_sr1((0x1U << 6), start, timeout_us); /* SR1 bit 6(RxNE). */
+        if (result != I2C1_RESULT_OK) goto failed;
+        received[index++] = (uint8_t)I2C1->DR;
+    }
+
+    /* 3. BTF=1에서 SCL이 멈춘 동안 ACK를 끄고 N-2를 읽는다.
+     * SR1 bit 2(BTF), CR1 bit 10(ACK). 대기 루프에서는 인터럽트를 막지 않는다. */
+    result = i2c1_wait_sr1((0x1U << 2), start, timeout_us);
+    if (result != I2C1_RESULT_OK) goto failed;
+    interrupt_mask = __get_PRIMASK();
+    __disable_irq();
+    I2C1->CR1 &= ~(0x1U << 10);
+    received[index++] = (uint8_t)I2C1->DR;
+    __set_PRIMASK(interrupt_mask);
+
+    /* 4. 마지막 바이트까지 도착하면 STOP 요청 후 N-1, N을 읽는다. CR1 bit 9(STOP). */
+    result = i2c1_wait_sr1((0x1U << 2), start, timeout_us);
+    if (result != I2C1_RESULT_OK) goto failed;
+    interrupt_mask = __get_PRIMASK();
+    __disable_irq();
+    I2C1->CR1 |= (0x1U << 9);
+    received[index++] = (uint8_t)I2C1->DR;
+    received[index++] = (uint8_t)I2C1->DR;
+    __set_PRIMASK(interrupt_mask);
+
+    /* CR1 bit 9(STOP), SR2 bit 1(BUSY) 해제까지 같은 전송 제한시간을 사용한다. */
+    while (((I2C1->CR1 & (0x1U << 9)) != 0U) ||
+           ((I2C1->SR2 & (0x1U << 1)) != 0U))
+    {
+        result = i2c1_check_error();
+        if (result != I2C1_RESULT_OK) goto failed;
+        if (timebase_elapsed_us(start) >= timeout_us)
+        {
+            result = I2C1_RESULT_TIMEOUT;
+            goto failed;
+        }
+    }
+    result = i2c1_check_error();
+    if (result != I2C1_RESULT_OK) goto failed;
+    /* 5. STOP까지 성공한 경우에만 호출자의 버퍼를 갱신한다. */
+    for (index = 0U; index < count; index++) value[index] = received[index];
+    return I2C1_RESULT_OK;
+
+failed:
+    i2c1_abort();
+    return result;
+}
+
 i2c1_result_t i2c1_write_register(uint8_t address, uint8_t reg,
                                 uint8_t value, uint32_t timeout_us)
 {

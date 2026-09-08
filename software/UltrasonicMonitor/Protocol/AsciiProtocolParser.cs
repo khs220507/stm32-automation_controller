@@ -44,6 +44,16 @@ public static class AsciiProtocolParser
 
         if (fields[0] == "OK")
         {
+            if (fields.Length == 3 && fields[1] == "CONFIG_ACCEL" && fields[2] == "2G")
+                return new ProtocolMessage(ProtocolMessageKind.AccelConfigured, line, Command: fields[1]);
+
+            if (fields.Length == 5 && fields[1] == "READ_ACCEL"
+                && short.TryParse(fields[2], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out short x)
+                && short.TryParse(fields[3], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out short y)
+                && short.TryParse(fields[4], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out short z))
+                return new ProtocolMessage(ProtocolMessageKind.Accelerometer, line, Command: fields[1],
+                    AccelX: x, AccelY: y, AccelZ: z);
+
             if (fields.Length == 4 && fields[1] == "WAKE_MPU6050"
                 && byte.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out byte before)
                 && byte.TryParse(fields[3], NumberStyles.None, CultureInfo.InvariantCulture, out byte after))

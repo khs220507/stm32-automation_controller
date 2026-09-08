@@ -4,6 +4,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/board_io.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/hcsr04.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/i2c1.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/mpu6050.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/protocol.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/syscalls.c"

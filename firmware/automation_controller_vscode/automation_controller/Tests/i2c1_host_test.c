@@ -6,6 +6,7 @@
 #include "hcsr04.h"
 #include "timebase.h"
 #include "uart2.h"
+#include "protocol.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +25,8 @@ static int error_stage;
 static uint32_t error_bits;
 static uint32_t now_us, tick_us, ticks, primask, critical_count;
 static uint8_t sensor_id;
+static int burst_mode;
+static uint8_t burst_count, burst_waits, burst_stall_wait;
 static int write_mode;
 static uint8_t expected_write_value, written_value;
 static int wake_mode, wake_transaction, wake_error_transaction, wake_stall_transaction;
@@ -41,6 +44,16 @@ uint32_t __get_PRIMASK(void) { return primask; }
 void __disable_irq(void) { primask = 1U; critical_count++; }
 void __set_PRIMASK(uint32_t value)
 {
+    if (burst_mode)
+    {
+        assert(stage == RECEIVE);
+        assert((I2C1->CR1 & ((0x1U << 10) | (0x1U << 11))) == 0U);
+        assert(burst_waits == burst_count - (critical_count == 1U ? 2U : 1U));
+        assert(((I2C1->CR1 & (0x1U << 9)) != 0U) == (critical_count == 2U));
+        if (critical_count == 2U) stage = STOP;
+        primask = value;
+        return;
+    }
     /* 수신 주소 ACK 이후 ACK/POS=0, STOP=1인 채로 임계구간을 빠져나와야 한다. */
     assert(stage == RECEIVE);
     assert((I2C1->CR1 & ((0x1U << 10) | (0x1U << 11))) == 0U);
@@ -106,7 +119,7 @@ static void advance_device(void)
         if (I2C1->DR == 0xD0U) I2C1->SR1 = (0x1U << 7); /* SR1 bit 7: TxE. */
         else
         {
-            assert(I2C1->DR == ((write_mode || wake_mode) ? 0x6BU : 0x75U));
+            assert(I2C1->DR == (burst_mode ? 0x3BU : (write_mode || wake_mode) ? 0x6BU : 0x75U));
             I2C1->SR1 = (0x1U << 2); /* SR1 bit 2: BTF. */
             stage = write_mode ? WRITE_DATA : RESTART;
         }
@@ -128,6 +141,16 @@ static void advance_device(void)
         stage = RECEIVE;
         break;
     case RECEIVE:
+        if (burst_mode)
+        {
+            if (burst_stall_wait == burst_waits + 1U) { I2C1->SR1 = 0U; break; }
+            burst_waits++;
+            /* 단순 레지스터 모형은 DR 읽기의 부수 효과를 모의하지 않는다.
+             * 같은 바이트로 수신 제어를 시험하고 다른 바이트의 결합은 센서 시험에서 확인한다. */
+            I2C1->DR = sensor_id;
+            I2C1->SR1 = (0x1U << 6) | (0x1U << 2); /* RxNE, BTF. */
+            break;
+        }
         assert(critical_count == 1U);
         I2C1->DR = wake_mode ? (sensor_power ^ (wake_transaction == 2 ? readback_xor : 0U)) : sensor_id;
         I2C1->SR1 = (0x1U << 6); /* SR1 bit 6: RxNE. */
@@ -194,6 +217,7 @@ static void reset_device(void)
     tick_us = 10U;
     sensor_id = 0x68U;
     write_mode = 0;
+    burst_mode = burst_count = burst_waits = burst_stall_wait = 0U;
     expected_write_value = written_value = 0U;
     wake_mode = wake_transaction = ignore_sensor_write = sensor_write_count = 0;
     wake_error_transaction = wake_stall_transaction = -1;
@@ -239,6 +263,52 @@ int main(void)
 {
     uint8_t value;
     setvbuf(stdout, NULL, _IONBF, 0);
+    uint8_t burst[14];
+    for (uint8_t count = 3U; count <= 14U; count++)
+    {
+        reset_device();
+        burst_mode = 1;
+        burst_count = count;
+        primask = count & 1U;
+        now_us = 0xFFFFFFD0U;
+        memset(burst, 0xAA, sizeof burst);
+        assert(i2c1_read_registers(0x68U, 0x3BU, burst, count, 1000U) == I2C1_RESULT_OK);
+        for (uint8_t i = 0U; i < sizeof burst; i++) assert(burst[i] == (i < count ? sensor_id : 0xAAU));
+        assert(critical_count == 2U && primask == (count & 1U) && stage == DONE);
+    }
+    for (uint8_t wait = 1U; wait <= 5U; wait++)
+    {
+        reset_device();
+        burst_mode = 1; burst_count = 6U; burst_stall_wait = wait;
+        memset(burst, 0xAA, sizeof burst);
+        assert(i2c1_read_registers(0x68U, 0x3BU, burst, 6U, 200U) == I2C1_RESULT_TIMEOUT);
+        for (uint8_t i = 0U; i < sizeof burst; i++) assert(burst[i] == 0xAAU);
+        assert(now_us <= 1200U && primask == 0U);
+    }
+    reset_device();
+    assert(i2c1_read_registers(0x68U, 0x3BU, burst, 2U, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
+    assert(i2c1_read_registers(0x68U, 0x3BU, burst, 15U, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
+    assert(i2c1_read_registers(0x80U, 0x3BU, burst, 6U, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
+    assert(i2c1_read_registers(0x68U, 0x3BU, NULL, 6U, 200U) == I2C1_RESULT_INVALID_ARGUMENT);
+    const uint32_t burst_errors[] = {(0x1U << 10), (0x1U << 8), (0x1U << 9), (0x1U << 11)};
+    const i2c1_result_t burst_results[] = {I2C1_RESULT_NACK, I2C1_RESULT_BUS_ERROR,
+        I2C1_RESULT_ARBITRATION_LOST, I2C1_RESULT_OVERRUN};
+    for (unsigned i = 0U; i < 4U; i++)
+    {
+        reset_device(); burst_mode = 1; burst_count = 6U;
+        error_stage = RECEIVE; error_bits = burst_errors[i];
+        memset(burst, 0xAA, sizeof burst);
+        assert(i2c1_read_registers(0x68U, 0x3BU, burst, 6U, 200U) == burst_results[i]);
+        for (unsigned j = 0U; j < sizeof burst; j++) assert(burst[j] == 0xAAU);
+        assert(primask == 0U && now_us <= 1200U);
+    }
+    reset_device();
+    TIM5->CR1 = 0U;
+    assert(i2c1_read_registers(0x68U, 0x3BU, burst, 6U, 200U) == I2C1_RESULT_NOT_READY);
+    reset_device();
+    protocol_send_accel(-32768, 0, 32767);
+    assert(strcmp(output, "OK,READ_ACCEL,-32768,0,32767\r\n") == 0);
+    puts("PASS: burst lengths/tail order, PRIMASK, wrap, partial-output protection, signed UART");
     /* 쓰기 전송: 주소/레지스터/데이터 순서, 래핑, 오류와 유한 대기를 확인한다.
      * 0x6B는 전송 시험용 주소이며 실제 센서 설정 적용 시험이 아니다. */
     const uint8_t write_values[] = { 0x00U, 0x01U, 0x6BU, 0xD0U, 0xFFU };

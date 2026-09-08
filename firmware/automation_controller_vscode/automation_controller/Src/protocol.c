@@ -179,6 +179,9 @@ static protocol_command_t protocol_parse_command(void)
 {
     command_buffer[command_length] = '\0';
 
+    if (strcmp(command_buffer, "CONFIG_ACCEL") == 0) return PROTOCOL_COMMAND_CONFIG_ACCEL;
+    if (strcmp(command_buffer, "READ_ACCEL") == 0) return PROTOCOL_COMMAND_READ_ACCEL;
+
     /* 표준 C strcmp는 두 문자열이 같으면 0을 반환한다. */
     if (strcmp(command_buffer, "PING") == 0)
         return PROTOCOL_COMMAND_PING;
@@ -205,4 +208,29 @@ static protocol_command_t protocol_parse_command(void)
         return PROTOCOL_COMMAND_WAKE_MPU6050;
 
     return PROTOCOL_COMMAND_UNKNOWN;
+}
+
+void protocol_send_accel_configured(void)
+{
+    uart2_write_text("OK,CONFIG_ACCEL,2G\r\n");
+}
+
+static void protocol_send_i16(int16_t value)
+{
+    /* -32768도 int32_t에서 양수로 바꾸므로 오버플로하지 않는다. */
+    int32_t number = value;
+    if (number < 0) { uart2_write_text("-"); number = -number; }
+    uart2_write_u32((uint32_t)number);
+}
+
+void protocol_send_accel(int16_t x, int16_t y, int16_t z)
+{
+    /* ±2g 원시값을 전송한다. PC에서 16384 LSB/g로 환산한다. */
+    uart2_write_text("OK,READ_ACCEL,");
+    protocol_send_i16(x);
+    uart2_write_text(",");
+    protocol_send_i16(y);
+    uart2_write_text(",");
+    protocol_send_i16(z);
+    uart2_write_text("\r\n");
 }

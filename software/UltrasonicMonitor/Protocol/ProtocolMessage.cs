@@ -11,6 +11,8 @@ public enum ProtocolMessageKind
     Mpu6050,
     Uart,
     Mpu6050Wake,
+    AccelConfigured,
+    Accelerometer,
 }
 
 public sealed record ProtocolMessage(
@@ -26,4 +28,7 @@ public sealed record ProtocolMessage(
     string? Description = null,
     byte? Identity = null,
     byte? PowerBefore = null,
-    byte? PowerAfter = null);
+    byte? PowerAfter = null,
+    short? AccelX = null,
+    short? AccelY = null,
+    short? AccelZ = null);

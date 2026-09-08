@@ -1,10 +1,12 @@
 #include "app_state.h"
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include "board_io.h"
 #include "hcsr04.h"
 #include "i2c1.h"
+#include "mpu6050.h"
 #include "protocol.h"
 #include "timebase.h"
 #include "uart2.h"
@@ -45,6 +47,7 @@ void app_state_init(void)
     app_state_clear_measurement();
     hcsr04_last_measurement_time_us = 0U;
     i2c_prepared = false;
+    mpu6050_accel_invalidate();
     hcsr04_prepared = false;
 }
 
@@ -66,6 +69,26 @@ void app_state_run(void)
     }
 
     command = protocol_poll_command();
+    if (command == PROTOCOL_COMMAND_CONFIG_ACCEL || command == PROTOCOL_COMMAND_READ_ACCEL)
+    {
+        const char *name = command == PROTOCOL_COMMAND_CONFIG_ACCEL ? "CONFIG_ACCEL" : "READ_ACCEL";
+        if (current_state != STATE_IDLE)
+        {
+            protocol_send_error(name, "INVALID_STATE");
+            return;
+        }
+        if (!i2c_prepared) i2c_prepared = i2c1_init();
+        if (!i2c_prepared) { protocol_send_error(name, "NOT_READY"); return; }
+
+        /* UI의 시작 요청에서 설정하고 이후 요청마다 한 표본만 반환한다. */
+        mpu6050_accel_t sample;
+        const char *error = command == PROTOCOL_COMMAND_CONFIG_ACCEL
+            ? mpu6050_accel_configure() : mpu6050_accel_read(&sample);
+        if (error != NULL) protocol_send_error(name, error);
+        else if (command == PROTOCOL_COMMAND_CONFIG_ACCEL) protocol_send_accel_configured();
+        else protocol_send_accel(sample.x, sample.y, sample.z);
+        return;
+    }
     if (command == PROTOCOL_COMMAND_PING)
     {
         protocol_send_pong();
@@ -184,6 +207,7 @@ static const char *app_state_i2c_error(i2c1_result_t result)
 
 static void app_state_wake_mpu6050(void)
 {
+    mpu6050_accel_invalidate();
     uint8_t before, desired, after;
     i2c1_result_t result;
 

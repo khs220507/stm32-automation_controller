@@ -42,6 +42,11 @@ i2c1_result_t i2c1_read_register(uint8_t address, uint8_t reg,
 i2c1_result_t i2c1_write_register(uint8_t address, uint8_t reg,
                                 uint8_t value, uint32_t timeout_us);
 
+/* 3~14바이트 연속 읽기. 1바이트 읽기와 같은 전제/시간 제한이며 성공 시에만 버퍼 갱신.
+ * MPU6050 XYZ(6바이트)용. 1바이트는 위 함수를 사용하고 2바이트 요청은 거부한다. */
+i2c1_result_t i2c1_read_registers(uint8_t address, uint8_t reg,
+                                uint8_t *value, uint8_t count, uint32_t timeout_us);
+
 /* Configure PB8/PB9 as the I2C1 SCL/SDA alternate-function pins. */
 void i2c1_pins_init(void);
 
