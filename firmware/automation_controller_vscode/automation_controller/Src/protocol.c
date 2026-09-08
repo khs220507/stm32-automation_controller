@@ -146,6 +146,15 @@ void protocol_send_mpu6050_id(uint8_t identity)
     uart2_write_text("\r\n");
 }
 
+void protocol_send_mpu6050_wake(uint8_t before, uint8_t after)
+{
+    uart2_write_text("OK,WAKE_MPU6050,");
+    uart2_write_u32(before);
+    uart2_write_text(",");
+    uart2_write_u32(after);
+    uart2_write_text("\r\n");
+}
+
 void protocol_send_hcsr04_out_of_range(uint32_t pulse_us)
 {
     uart2_write_text("HCSR04 OUT_OF_RANGE PULSE_US=");
@@ -192,6 +201,8 @@ static protocol_command_t protocol_parse_command(void)
     {
         return PROTOCOL_COMMAND_CHECK_MPU6050;
     }
+    if (strcmp(command_buffer, "WAKE_MPU6050") == 0)
+        return PROTOCOL_COMMAND_WAKE_MPU6050;
 
     return PROTOCOL_COMMAND_UNKNOWN;
 }

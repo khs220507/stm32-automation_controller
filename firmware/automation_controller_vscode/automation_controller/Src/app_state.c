@@ -10,7 +10,8 @@
 #include "uart2.h"
 
 #define HCSR04_MEASUREMENT_PERIOD_US 100000U
-/* WHO_AM_I 1회 읽기 전체 한도. 실기 검증 전 임시값 10 ms. */
+/* I2C 전송 1회 한도. 실기 검증 전 임시값 10 ms.
+ * SLEEP 해제는 읽기/쓰기/재읽기 3회이며 오류 정리 대기는 별도다. */
 #define MPU6050_DIAGNOSTIC_TIMEOUT_US 10000U
 
 typedef enum
@@ -33,6 +34,8 @@ static const char *app_state_name(system_state_t state);
 static void app_state_run_auto(protocol_command_t command);
 static void app_state_clear_measurement(void);
 static void app_state_check_mpu6050(void);
+static void app_state_wake_mpu6050(void);
+static const char *app_state_i2c_error(i2c1_result_t result);
 static void app_state_check_hcsr04(void);
 static void app_state_prepare_hcsr04(void);
 
@@ -85,6 +88,15 @@ void app_state_run(void)
             app_state_check_mpu6050();
         return;
     }
+    if (command == PROTOCOL_COMMAND_WAKE_MPU6050)
+    {
+        /* 센서 설정 변경은 IDLE에서 명시적인 요청을 받았을 때만 수행한다. */
+        if (current_state != STATE_IDLE)
+            protocol_send_error("WAKE_MPU6050", "INVALID_STATE");
+        else
+            app_state_wake_mpu6050();
+        return;
+    }
     if (command == PROTOCOL_COMMAND_GET_STATUS)
     {
         protocol_send_status(app_state_name(current_state));
@@ -133,7 +145,6 @@ void app_state_run(void)
 static void app_state_check_mpu6050(void)
 {
     uint8_t identity;
-    const char *error_code;
     if (!i2c_prepared)
     {
         i2c_prepared = i2c1_init();
@@ -148,21 +159,75 @@ static void app_state_check_mpu6050(void)
      * 식별 레지스터 읽기에는 센서 측정 모드 설정을 변경하지 않는다. */
     i2c1_result_t result = i2c1_read_register(0x68U, 0x75U, &identity,
                                            MPU6050_DIAGNOSTIC_TIMEOUT_US);
-    switch (result)
+    if (result == I2C1_RESULT_OK)
     {
-    case I2C1_RESULT_OK:
         protocol_send_mpu6050_id(identity);
         return;
-    case I2C1_RESULT_BUS_BUSY: error_code = "BUS_BUSY"; break;
-    case I2C1_RESULT_TIMEOUT: error_code = "TIMEOUT"; break;
-    case I2C1_RESULT_NACK: error_code = "NACK"; break;
-    case I2C1_RESULT_BUS_ERROR: error_code = "BUS_ERROR"; break;
-    case I2C1_RESULT_ARBITRATION_LOST: error_code = "ARBITRATION_LOST"; break;
-    case I2C1_RESULT_OVERRUN: error_code = "OVERRUN"; break;
-    case I2C1_RESULT_NOT_READY: error_code = "NOT_READY"; break;
-    default: error_code = "INTERNAL_ERROR"; break;
     }
-    protocol_send_error("CHECK_MPU6050", error_code);
+    protocol_send_error("CHECK_MPU6050", app_state_i2c_error(result));
+}
+
+static const char *app_state_i2c_error(i2c1_result_t result)
+{
+    switch (result)
+    {
+    case I2C1_RESULT_BUS_BUSY: return "BUS_BUSY";
+    case I2C1_RESULT_TIMEOUT: return "TIMEOUT";
+    case I2C1_RESULT_NACK: return "NACK";
+    case I2C1_RESULT_BUS_ERROR: return "BUS_ERROR";
+    case I2C1_RESULT_ARBITRATION_LOST: return "ARBITRATION_LOST";
+    case I2C1_RESULT_OVERRUN: return "OVERRUN";
+    case I2C1_RESULT_NOT_READY: return "NOT_READY";
+    default: return "INTERNAL_ERROR";
+    }
+}
+
+static void app_state_wake_mpu6050(void)
+{
+    uint8_t before, desired, after;
+    i2c1_result_t result;
+
+    /* 1. 통신을 준비하고 현재 전원 설정을 읽는다. */
+    if (!i2c_prepared)
+    {
+        i2c_prepared = i2c1_init();
+        if (!i2c_prepared)
+        {
+            protocol_send_error("WAKE_MPU6050", "NOT_READY");
+            return;
+        }
+    }
+    /* 로컬 RM-MPU-6000A Rev 3.2 p.44~45, 4.36절: PWR_MGMT_1=0x6B.
+     * 주소 0x68 모듈의 레지스터 호환성을 전제한다. 식별값 일치 판정은 아니다. */
+    result = i2c1_read_register(0x68U, 0x6BU, &before, MPU6050_DIAGNOSTIC_TIMEOUT_US);
+    if (result != I2C1_RESULT_OK) goto failed;
+    /* bit 7(DEVICE_RESET)=1이면 리셋 진행 중이므로 다시 쓰지 않는다. */
+    if ((before & (0x1U << 7)) != 0U)
+    {
+        protocol_send_error("WAKE_MPU6050", "SENSOR_RESET");
+        return;
+    }
+
+    /* 2. bit 6(SLEEP)만 0으로 바꾸고 다른 비트는 보존한다. */
+    desired = (uint8_t)(before & ~(0x1U << 6));
+    result = i2c1_write_register(0x68U, 0x6BU, desired, MPU6050_DIAGNOSTIC_TIMEOUT_US);
+    if (result != I2C1_RESULT_OK) goto failed;
+
+    /* 3. 다시 읽어 SLEEP 해제와 나머지 비트 보존을 확인한다.
+     * 이 확인은 측정 안정화/가속도·각속도 수집 성공을 뜻하지 않는다. */
+    result = i2c1_read_register(0x68U, 0x6BU, &after, MPU6050_DIAGNOSTIC_TIMEOUT_US);
+    if (result != I2C1_RESULT_OK) goto failed;
+    if (after != desired)
+    {
+        protocol_send_error("WAKE_MPU6050", "VERIFY_FAILED");
+        return;
+    }
+    protocol_send_mpu6050_wake(before, after);
+    return;
+
+failed:
+    /* 쓰기 이후 실패라면 센서 설정이 이미 변경됐을 수 있다. 자동 재시도하지 않는다. */
+    protocol_send_error("WAKE_MPU6050", app_state_i2c_error(result));
 }
 
 static void app_state_prepare_hcsr04(void)

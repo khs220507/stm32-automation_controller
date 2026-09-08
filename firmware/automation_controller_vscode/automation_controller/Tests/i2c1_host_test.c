@@ -26,6 +26,9 @@ static uint32_t now_us, tick_us, ticks, primask, critical_count;
 static uint8_t sensor_id;
 static int write_mode;
 static uint8_t expected_write_value, written_value;
+static int wake_mode, wake_transaction, wake_error_transaction, wake_stall_transaction;
+static int ignore_sensor_write, sensor_write_count;
+static uint8_t sensor_power, readback_xor;
 static int persistent_busy;
 static int safe_output_count;
 static int i2c_init_count, ultrasonic_init_count, ultrasonic_measure_count;
@@ -47,6 +50,21 @@ void __set_PRIMASK(uint32_t value)
 
 static void advance_device(void)
 {
+    /* SLEEP 명령은 읽기/쓰기/재읽기의 세 전송을 같은 모의 센서에서 수행한다. */
+    if (wake_mode && stage == DONE && ((I2C1->CR1 & (0x1U << 8)) != 0U))
+    {
+        wake_transaction++;
+        assert(wake_transaction <= 2);
+        write_mode = wake_transaction == 1;
+        critical_count = 0U;
+        stage = START;
+    }
+    if (wake_mode && wake_transaction == wake_stall_transaction) return;
+    if (wake_mode && wake_transaction == wake_error_transaction)
+    {
+        error_stage = WRITE_ADDRESS;
+        wake_error_transaction = -1;
+    }
     if (persistent_busy) { I2C1->SR2 = (0x1U << 1); return; } /* SR2 bit 1: BUSY. */
     if ((int)stage == stall_stage) return;
     /* 전송 중 오류 정리가 STOP을 요청하면 남은 주소/데이터 단계는 진행하지 않는다.
@@ -88,7 +106,7 @@ static void advance_device(void)
         if (I2C1->DR == 0xD0U) I2C1->SR1 = (0x1U << 7); /* SR1 bit 7: TxE. */
         else
         {
-            assert(I2C1->DR == (write_mode ? 0x6BU : 0x75U));
+            assert(I2C1->DR == ((write_mode || wake_mode) ? 0x6BU : 0x75U));
             I2C1->SR1 = (0x1U << 2); /* SR1 bit 2: BTF. */
             stage = write_mode ? WRITE_DATA : RESTART;
         }
@@ -96,6 +114,11 @@ static void advance_device(void)
     case WRITE_DATA:
         assert(I2C1->DR == expected_write_value);
         written_value = (uint8_t)I2C1->DR;
+        if (wake_mode)
+        {
+            sensor_write_count++;
+            if (!ignore_sensor_write) sensor_power = written_value;
+        }
         I2C1->SR1 = (0x1U << 2); /* SR1 bit 2(BTF): 데이터 ACK 후 완료. */
         stage = STOP;
         break;
@@ -106,7 +129,7 @@ static void advance_device(void)
         break;
     case RECEIVE:
         assert(critical_count == 1U);
-        I2C1->DR = sensor_id;
+        I2C1->DR = wake_mode ? (sensor_power ^ (wake_transaction == 2 ? readback_xor : 0U)) : sensor_id;
         I2C1->SR1 = (0x1U << 6); /* SR1 bit 6: RxNE. */
         stage = STOP;
         break;
@@ -172,6 +195,10 @@ static void reset_device(void)
     sensor_id = 0x68U;
     write_mode = 0;
     expected_write_value = written_value = 0U;
+    wake_mode = wake_transaction = ignore_sensor_write = sensor_write_count = 0;
+    wake_error_transaction = wake_stall_transaction = -1;
+    sensor_power = 0x40U;
+    readback_xor = 0U;
     persistent_busy = safe_output_count = 0;
     i2c_init_count = ultrasonic_init_count = ultrasonic_measure_count = 0;
     simulated_ultrasonic = (hcsr04_measurement_t){ HCSR04_STATUS_TIMEOUT, 0U, 0U };
@@ -196,6 +223,16 @@ static void request(const char *command, const char *expected)
     input = command;
     app_state_run();
     assert(strcmp(output, expected) == 0);
+}
+
+static void prepare_wake(uint8_t power)
+{
+    reset_device();
+    app_state_init();
+    app_state_run();
+    wake_mode = 1;
+    sensor_power = power;
+    expected_write_value = power & ~(0x1U << 6); /* PWR_MGMT_1 bit 6(SLEEP). */
 }
 
 int main(void)
@@ -372,5 +409,57 @@ int main(void)
     request("", "IDLE\r\n");
     request("PING\r\n", "OK,PING,PONG\r\n");
     puts("PASS: legacy AUTO rejects individual sensor tests, STOP returns to IDLE");
+
+    /* 실제 app_state -> read/write/read -> UART까지 연결하는 SLEEP 해제 시험. */
+    prepare_wake(0x40U);
+    now_us = 0xFFFFFFD0U;
+    request("WAKE_MPU6050\r\n", "OK,WAKE_MPU6050,64,0\r\n");
+    assert(wake_transaction == 2 && sensor_write_count == 1 && sensor_power == 0U);
+    request("GET_STATUS\r\n", "OK,GET_STATUS,IDLE,0\r\n");
+    /* bit 5(CYCLE), bit 3(TEMP_DIS), bit 2:0(CLKSEL) 보존. */
+    prepare_wake(0x69U);
+    request("WAKE_MPU6050\r\n", "OK,WAKE_MPU6050,105,41\r\n");
+    assert(sensor_power == 0x29U && sensor_write_count == 1);
+    prepare_wake(0x01U);
+    request("WAKE_MPU6050\r\n", "OK,WAKE_MPU6050,1,1\r\n");
+    prepare_wake(0xC0U); /* bit 7(DEVICE_RESET)=1: 쓰기 금지. */
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,SENSOR_RESET\r\n");
+    assert(sensor_write_count == 0 && wake_transaction == 0);
+    prepare_wake(0x40U);
+    ignore_sensor_write = 1;
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,VERIFY_FAILED\r\n");
+    assert(sensor_write_count == 1);
+    prepare_wake(0x41U);
+    readback_xor = 0x01U; /* SLEEP은 해제됐지만 CLKSEL이 바뀐 경우도 실패. */
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,VERIFY_FAILED\r\n");
+    for (int transaction = 0; transaction < 3; transaction++)
+    {
+        prepare_wake(0x40U);
+        wake_error_transaction = transaction;
+        error_bits = (0x1U << 10); /* SR1 bit 10(AF): 주소 NACK. */
+        request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,NACK\r\n");
+        assert(wake_transaction == transaction);
+        assert(sensor_write_count == (transaction == 2 ? 1 : 0));
+        request("PING\r\n", "OK,PING,PONG\r\n");
+        prepare_wake(0x40U);
+        wake_stall_transaction = transaction;
+        request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,TIMEOUT\r\n");
+        assert(wake_transaction == transaction && now_us <= 31000U);
+        request("PING\r\n", "OK,PING,PONG\r\n");
+    }
+    prepare_wake(0x40U);
+    TIM5->CR1 = 0U;
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,NOT_READY\r\n");
+    assert(sensor_write_count == 0);
+    prepare_wake(0x40U);
+    I2C1->SR2 = (0x1U << 1); /* SR2 bit 1(BUSY): 외부 버스 점유. */
+    persistent_busy = 1;
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,BUS_BUSY\r\n");
+    assert(sensor_write_count == 0);
+    prepare_wake(0x40U);
+    request("START\r\n", "AUTO\r\n");
+    request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,INVALID_STATE\r\n");
+    assert(sensor_write_count == 0 && ticks == 0U);
+    puts("PASS: wake command read/write/verify, preserved bits, reset guard, failures and IDLE restriction");
     return 0;
 }
