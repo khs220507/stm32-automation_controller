@@ -85,7 +85,7 @@
                     <TextBlock FontSize="19" FontWeight="SemiBold" Text="I2C · MPU6050" />
                     <TextBlock Margin="0,4,0,0" Foreground="#687780" Text="식별 레지스터 확인" />
                     <TextBlock x:Name="MpuStatusText" Style="{StaticResource TestResultStyle}" Text="확인 전" />
-                    <TextBlock x:Name="MpuIdentityText" Foreground="#687780" Text="식별값: — · 기대값: 0x68" TextWrapping="Wrap" />
+                    <TextBlock x:Name="MpuIdentityText" Foreground="#687780" Text="식별값: —" TextWrapping="Wrap" />
                     <WrapPanel Margin="0,18,0,12">
                         <Button x:Name="MpuStartButton" Click="MpuStartButton_Click" Content="시작" IsEnabled="False" />
                         <Button x:Name="MpuStopButton" Click="MpuStopButton_Click" Content="정지" IsEnabled="False" />

@@ -41,7 +41,8 @@ public sealed class AsciiProtocolParserTests
     public void RejectsMalformedDashboardResponses(string line) =>
         Assert.AreEqual(ProtocolMessageKind.Unknown, AsciiProtocolParser.Parse(line).Kind);
 
-    [DataRow("OK,CHECK_MPU6050,104", "OK", (byte)104)]
+    [DataRow("OK,CHECK_MPU6050,114", "OK", (byte)114)]
+    [DataRow("OK,CHECK_MPU6050,104", "ID_MISMATCH", (byte)104)]
     [DataRow("OK,CHECK_MPU6050,112", "ID_MISMATCH", (byte)112)]
     [DataRow("OK,CHECK_MPU6050,0", "ID_MISMATCH", (byte)0)]
     [DataRow("OK,CHECK_MPU6050,255", "ID_MISMATCH", (byte)255)]

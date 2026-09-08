@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SetMpuDisplay("확인 전");
         LogListBox.ItemsSource = _logEntries;
         UartLogListBox.ItemsSource = _uartLogEntries;
         MpuLogListBox.ItemsSource = _mpuLogEntries;
@@ -459,10 +460,12 @@ public partial class MainWindow : Window
     {
         MpuStatusText.Text = status;
         MpuIdentityText.Text = identity is byte value
-            ? $"식별값: 0x{value:X2} · 기대값: 0x68" : "식별값: — · 기대값: 0x68";
+            ? $"식별값: 0x{value:X2} · 기대값: 0x{AsciiProtocolParser.ExpectedMpu6050Identity:X2}"
+            : $"식별값: — · 기대값: 0x{AsciiProtocolParser.ExpectedMpu6050Identity:X2}";
         MpuStatusText.Foreground = new SolidColorBrush(failed
             ? Color.FromRgb(183, 50, 50)
-            : identity == 0x68 ? Color.FromRgb(29, 125, 79) : Color.FromRgb(82, 97, 107));
+            : identity == AsciiProtocolParser.ExpectedMpu6050Identity
+                ? Color.FromRgb(29, 125, 79) : Color.FromRgb(82, 97, 107));
     }
 
     private void UpdateMpuDisplay(ProtocolMessage message)

@@ -4,6 +4,8 @@ namespace UltrasonicMonitor.Protocol;
 
 public static class AsciiProtocolParser
 {
+    // 사용자가 현재 모듈의 연결 확인 기대값으로 합의한 값. 장치 주소와는 별개다.
+    public const byte ExpectedMpu6050Identity = 0x72;
     private static readonly HashSet<string> States =
     [
         "INIT", "IDLE", "AUTO", "DIAG", "STOP", "FAULT",
@@ -70,7 +72,7 @@ public static class AsciiProtocolParser
             {
                 // OK는 읽기 성공이다. 기대 식별값과 다르면 센서 확인 성공으로 표시하지 않는다.
                 return new ProtocolMessage(ProtocolMessageKind.Mpu6050, line,
-                    Command: fields[1], SensorStatus: identity == 0x68 ? "OK" : "ID_MISMATCH",
+                    Command: fields[1], SensorStatus: identity == ExpectedMpu6050Identity ? "OK" : "ID_MISMATCH",
                     Identity: identity);
             }
 

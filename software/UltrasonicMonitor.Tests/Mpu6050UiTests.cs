@@ -23,7 +23,7 @@ public sealed class Mpu6050UiTests
             SynchronizationContext.SetSynchronizationContext(
                 new DispatcherSynchronizationContext(window.Dispatcher));
             BeginDiagnostic(window);
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             BeginDiagnostic(window);
             var task = (Task)Call(window, "WaitForResponseTimeoutAsync",
                 "CHECK_MPU6050", CancellationToken.None)!;
@@ -34,7 +34,7 @@ public sealed class Mpu6050UiTests
             task.GetAwaiter().GetResult();
             StringAssert.Contains(Text(window, "MpuStatusText"), "보드 응답 없음");
             StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: —");
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             StringAssert.Contains(Text(window, "MpuStatusText"), "보드 응답 없음");
         }
         finally
@@ -88,9 +88,9 @@ public sealed class Mpu6050UiTests
         try
         {
             BeginDiagnostic(window);
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             Assert.AreEqual("MPU6050 확인됨", Text(window, "MpuStatusText"));
-            StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: 0x68");
+            StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: 0x72");
 
             BeginDiagnostic(window);
             Call(window, "HandleReceivedLine", "ERR,CHECK_MPU6050,NACK");
@@ -121,19 +121,19 @@ public sealed class Mpu6050UiTests
         try
         {
             BeginDiagnostic(window);
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             Call(window, "Disconnect");
             Assert.AreEqual("연결 안 됨", Text(window, "MpuStatusText"));
             StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: —");
 
             BeginDiagnostic(window);
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             Call(window, "HandleReceivedLine", "READY");
             StringAssert.Contains(Text(window, "MpuStatusText"), "보드 재시작");
             StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: —");
 
             BeginDiagnostic(window);
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             Call(window, "HandleReceivedLine", "FAULT");
             StringAssert.Contains(Text(window, "MpuStatusText"), "보드 고장 상태");
             StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: —");
@@ -147,7 +147,7 @@ public sealed class Mpu6050UiTests
         var window = new MainWindow();
         try
         {
-            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,104");
+            Call(window, "HandleReceivedLine", "OK,CHECK_MPU6050,114");
             Assert.AreEqual("확인 전", Text(window, "MpuStatusText"));
             StringAssert.Contains(Text(window, "MpuIdentityText"), "식별값: —");
         }

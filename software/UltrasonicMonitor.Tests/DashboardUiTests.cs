@@ -73,7 +73,7 @@ public sealed class DashboardUiTests
             Assert.AreEqual(sensorTime, Text(window, "SensorLastCheckText"));
             StringAssert.Contains(Text(window, "MpuStatusText"), "버스 사용 중");
 
-            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,104");
+            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,114");
             string mpuTime = Text(window, "MpuLastCheckText");
             Reply(window, "CHECK_HCSR04", "OK,CHECK_HCSR04,TIMEOUT,0,0");
             Assert.AreEqual("—", Text(window, "DistanceText"));
@@ -179,7 +179,7 @@ public sealed class DashboardUiTests
         SynchronizationContext? previous = SynchronizationContext.Current;
         try
         {
-            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,104");
+            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,114");
             Set(window, "_pendingCommand", command);
             Set(window, "_ultrasonicRepeating", command == "CHECK_HCSR04");
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
@@ -207,7 +207,7 @@ public sealed class DashboardUiTests
         {
             Reply(window, "PING", "OK,PING,PONG");
             Reply(window, "CHECK_HCSR04", "OK,CHECK_HCSR04,OK,25,1450");
-            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,104");
+            Reply(window, "CHECK_MPU6050", "OK,CHECK_MPU6050,114");
             Set(window, "_ultrasonicRepeating", true);
             Get<DispatcherTimer>(window, "_sensorPollTimer").Start();
             Call(window, "Disconnect");
