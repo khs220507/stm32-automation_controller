@@ -541,9 +541,9 @@ public partial class MainWindow : Window
             "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
             _ => (_logEntries, LogListBox),
         };
-        entries.Add($"{DateTime.Now:HH:mm:ss.fff} [{direction,-8}] {text}");
-        while (entries.Count > 500) entries.RemoveAt(0);
-        listBox.ScrollIntoView(entries[^1]);
+        entries.Insert(0, $"{DateTime.Now:HH:mm:ss.fff} [{direction,-8}] {text}");
+        while (entries.Count > 500) entries.RemoveAt(entries.Count - 1);
+        listBox.ScrollIntoView(entries[0]);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => Disconnect();

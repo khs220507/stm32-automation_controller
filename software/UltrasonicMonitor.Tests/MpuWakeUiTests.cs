@@ -9,6 +9,50 @@ namespace UltrasonicMonitor.Tests;
 [DoNotParallelize]
 public sealed class MpuWakeUiTests
 {
+    [STATestMethod]
+    public void LogsScrollInternallyWithoutGrowingDashboard()
+    {
+        var w = new MainWindow();
+        try
+        {
+            var content = (System.Windows.FrameworkElement)w.Content;
+            var size = new System.Windows.Size(980, 700);
+            void Layout()
+            {
+                content.Measure(size);
+                content.Arrange(new System.Windows.Rect(size));
+                content.UpdateLayout();
+            }
+            Layout();
+            var dashboard = (System.Windows.FrameworkElement)((ScrollViewer)content).Content;
+            double initialHeight = dashboard.ActualHeight;
+            foreach (string command in new[] { "PING", "CHECK_MPU6050", "CHECK_HCSR04", "SYSTEM" })
+                for (int i = 0; i < 150; i++) Call(w, "AppendLog", "RX", $"{i}: test response", command);
+            Layout();
+            Assert.AreEqual(initialHeight, dashboard.ActualHeight, 1.0);
+            foreach (string name in new[] { "UartLogListBox", "MpuLogListBox", "UltrasonicLogListBox", "LogListBox" })
+            {
+                var list = (ListBox)w.FindName(name);
+                Assert.IsTrue(list.ActualHeight > 0 && list.ActualHeight < 260);
+                var scroll = FindScroll(list)!;
+                Assert.IsNotNull(scroll);
+                Assert.IsGreaterThan(scroll.ViewportHeight, scroll.ExtentHeight);
+            }
+        }
+        finally { w.Close(); }
+    }
+
+    private static ScrollViewer? FindScroll(System.Windows.DependencyObject node)
+    {
+        if (node is ScrollViewer scroll) return scroll;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(node); i++)
+        {
+            var result = FindScroll(System.Windows.Media.VisualTreeHelper.GetChild(node, i));
+            if (result is not null) return result;
+        }
+        return null;
+    }
+
     private static object? Call(MainWindow w, string name, params object?[] args) =>
         typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, args);
     private static void Set(MainWindow w, string name, object value) =>

@@ -32,8 +32,10 @@ public sealed class DashboardUiTests
             Call(window, "HandleReceivedLine", "invalid line");
             Assert.AreEqual(initialCommon + 3, common.Items.Count);
             for (int i = 0; i < 510; i++)
-                Call(window, "AppendLog", "TX", "CHECK_HCSR04", "CHECK_HCSR04");
+                Call(window, "AppendLog", "TX", $"log {i}", "CHECK_HCSR04");
             Assert.AreEqual(500, ultrasonic.Items.Count);
+            StringAssert.EndsWith((string)ultrasonic.Items[0], "log 509");
+            StringAssert.EndsWith((string)ultrasonic.Items[499], "log 10");
             Assert.AreEqual(3, mpu.Items.Count);
             Assert.AreEqual(1, uart.Items.Count);
         }
