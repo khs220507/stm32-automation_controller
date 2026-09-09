@@ -7,6 +7,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/mpu6050.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/protocol.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/spi2.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/syscalls.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/sysmem.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/system_stm32f4xx.c"

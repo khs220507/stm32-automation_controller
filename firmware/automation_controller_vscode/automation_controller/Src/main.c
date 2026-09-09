@@ -1,8 +1,10 @@
 #include "app_state.h"
+#include "spi2.h"
 
 int main(void)
 {
-     app_state_init();
+    spi2_enable_clocks();
+    app_state_init();
 
     while (1)
     {
