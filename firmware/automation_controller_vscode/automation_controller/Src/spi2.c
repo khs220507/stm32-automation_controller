@@ -1,6 +1,77 @@
 #include "spi2.h"
+#include "timebase.h"
+
+#include <stdbool.h>
+#include <stddef.h>
 
 #include "stm32f401xe.h"
+
+/* 실패한 프레임의 늦은 수신값을 다음 전송에 섞지 않도록 재부팅까지 차단한다. */
+static bool spi2_transfer_failed;
+
+static spi2_result_t spi2_wait_status(uint32_t mask, uint32_t expected,
+                                     uint32_t start, uint32_t timeout_us)
+{
+    for (;;)
+    {
+        uint32_t status = SPI2->SR;
+
+        /* SR: FRE(8), OVR(6), MODF(5), CRCERR(4)는 전송 오류. */
+        if ((status & ((0x1U << 8) | (0x1U << 6) | (0x1U << 5) | (0x1U << 4))) != 0U)
+            return SPI2_RESULT_HARDWARE_ERROR;
+        /* CR1: SPE(6)·MSTR(2)가 모두 1이어야 한다. */
+        if ((SPI2->CR1 & ((0x1U << 6) | (0x1U << 2))) != ((0x1U << 6) | (0x1U << 2)))
+            return SPI2_RESULT_NOT_READY;
+        if (timebase_elapsed_us(start) >= timeout_us)
+            return SPI2_RESULT_TIMEOUT;
+        if ((status & mask) == expected)
+            return SPI2_RESULT_OK;
+    }
+}
+
+spi2_result_t spi2_transfer_byte(uint8_t tx, uint8_t *rx, uint32_t timeout_us)
+{
+    uint32_t start;
+    uint8_t received;
+    spi2_result_t result;
+
+    if ((rx == NULL) || (timeout_us == 0U) || (timeout_us > 0x7FFFFFFFU))
+        return SPI2_RESULT_INVALID_ARGUMENT;
+    if (spi2_transfer_failed)
+        return SPI2_RESULT_NOT_READY;
+
+    start = timebase_now_us();
+    /* SR bit 1(TXE)=1: 송신 버퍼가 비면 쓸 수 있다. */
+    result = spi2_wait_status((0x1U << 1), (0x1U << 1), start, timeout_us);
+    if (result != SPI2_RESULT_OK) goto failed;
+
+    /* SR bit 7(BSY)·bit 0(RXNE): 이전 전송/수신값이 남아 있으면 거부한다. */
+    if ((SPI2->SR & ((0x1U << 7) | (0x1U << 0))) != 0U)
+    {
+        result = SPI2_RESULT_DIRTY_STATE;
+        goto failed;
+    }
+
+    /* DR[7:0]: 쓰기는 송신 버퍼, 읽기는 별도의 수신 버퍼에 접근한다. */
+    SPI2->DR = tx;
+    /* SR bit 0(RXNE)=1: 1바이트 수신 완료. */
+    result = spi2_wait_status((0x1U << 0), (0x1U << 0), start, timeout_us);
+    if (result != SPI2_RESULT_OK) goto failed;
+    received = (uint8_t)SPI2->DR;
+
+    /* TXE(1)=1 다음 BSY(7)=0 확인: CS 해제 전 마지막 클록까지 끝나야 한다. */
+    result = spi2_wait_status((0x1U << 1), (0x1U << 1), start, timeout_us);
+    if (result != SPI2_RESULT_OK) goto failed;
+    result = spi2_wait_status((0x1U << 7), 0U, start, timeout_us);
+    if (result != SPI2_RESULT_OK) goto failed;
+
+    *rx = received;
+    return SPI2_RESULT_OK;
+
+failed:
+    spi2_transfer_failed = true;
+    return result;
+}
 
 void spi2_enable_clocks(void)
 {
