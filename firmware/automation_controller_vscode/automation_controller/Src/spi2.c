@@ -57,3 +57,30 @@ void spi2_pins_init(void)
     GPIOC->MODER &= ~(0x3U << 8);
     GPIOC->MODER |= (0x1U << 8);
 }
+
+void spi2_configure(void)
+{
+    /* 부팅 초기화 전용. RM0368 Rev 6, 20.5.1절 p.602~604:
+     * CR1 bit 6(SPE)=0 상태에서 형식·분주를 설정한다. 진행 중인 전송용 정지 절차가 아니다. */
+    SPI2->CR1 = 0U;
+
+    /* 20.5.8절 p.608: I2SCFGR bit 11(I2SMOD)=0: SPI 선택,
+     * bit 10(I2SE)=0: I2S 비활성화. */
+    SPI2->I2SCFGR &= ~((0x1U << 11) | (0x1U << 10));
+
+    /* 20.5.2절 p.604~605: CR2 bits 7:5=0(인터럽트 끔), bit 4=0(Motorola 형식),
+     * bit 2(SSOE)=0(하드웨어 NSS 출력 끔), bits 1:0=0(DMA 끔). */
+    SPI2->CR2 = 0U;
+
+    /* CR1 bit 9(SSM)=1: 내부 NSS를 소프트웨어로 관리, bit 8(SSI)=1: 내부 NSS HIGH.
+     * 실제 모듈 선택선 PB12는 GPIO로 별도 제어한다.
+     * bits 5:3(BR)=011: PCLK1/16. 현재 HSI 16 MHz, AHB/APB1 분주 1 조건에서 명목 1 MHz.
+     * bit 2(MSTR)=1: STM32 Master.
+     * 나머지 0: bit 15=0·bit 10=0(2선 전이중), bit 13=0(CRC 끔),
+     * bit 11=0(8비트), bit 7=0(MSB 우선), bits 1:0=00(CPOL=0·CPHA=0, Mode 0).
+     * W5500 v1.0.6 p.12~13: Mode 0/3, MSB 우선 지원. */
+    SPI2->CR1 = (0x1U << 9) | (0x1U << 8) | (0x3U << 3) | (0x1U << 2);
+
+    /* CR1 bit 6(SPE)=1: SPI2 활성화. DR에 데이터를 쓰기 전에는 전송을 시작하지 않는다. */
+    SPI2->CR1 |= (0x1U << 6);
+}
