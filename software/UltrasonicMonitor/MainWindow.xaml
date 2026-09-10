@@ -125,9 +125,10 @@
                 <Border Background="#70FFFFFF" CornerRadius="12" Padding="10,5" Margin="0,0,12,0" VerticalAlignment="Center">
                     <TextBlock x:Name="ConnectionStatusText" Text="연결 안 됨" FontSize="11" Foreground="#52616B" />
                 </Border>
-                <ComboBox x:Name="PortComboBox" Width="104" MinHeight="30" Margin="0,0,6,0"
-                          VerticalContentAlignment="Center" AutomationProperties.Name="COM 포트" />
-                <Button Click="RefreshPorts_Click" Content="새로 고침" />
+                <TextBox x:Name="HostTextBox" Text="169.254.100.2" Width="122" MinHeight="30" Margin="0,0,6,0"
+                         VerticalContentAlignment="Center" AutomationProperties.Name="보드 IPv4 주소" />
+                <TextBox x:Name="TcpPortTextBox" Text="5000" Width="50" MinHeight="30" Margin="0,0,6,0"
+                         VerticalContentAlignment="Center" AutomationProperties.Name="TCP 포트" />
                 <Button x:Name="ConnectButton" Click="Connect_Click" Content="연결" Style="{StaticResource AccentButton}" Margin="0" />
             </StackPanel>
         </Grid>
@@ -141,9 +142,9 @@
             <Border Grid.Column="0" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="22" /><RowDefinition Height="48" /><RowDefinition Height="18" /><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <TextBlock Text="UART" Style="{StaticResource Heading}" />
+                    <TextBlock Text="TCP" Style="{StaticResource Heading}" />
                     <TextBlock x:Name="UartStatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Status}" />
-                    <TextBlock Grid.Row="2" Text="USB · USART2" Style="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="2" Text="LAN · 명령/응답" Style="{StaticResource Muted}" />
                     <Button x:Name="UartCheckButton" Grid.Row="3" Content="요청·응답 확인" HorizontalAlignment="Left"
                             VerticalAlignment="Top" Click="UartCheckButton_Click" IsEnabled="False" />
                     <TextBlock x:Name="UartLastCheckText" Grid.Row="4" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
@@ -253,7 +254,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Border Style="{StaticResource Card}" Padding="10,10,6,6">
-                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="UART 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
+                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="TCP 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
                 </Border>
                 <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10,10,6,6">
                     <DockPanel><TextBlock DockPanel.Dock="Top" Text="MPU6050 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="MpuLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
@@ -273,7 +274,7 @@
             </Border>
         </Grid>
         <DockPanel Grid.Row="4" VerticalAlignment="Bottom" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left" Text="115200 baud · 8N1" Style="{StaticResource Muted}" />
+            <TextBlock DockPanel.Dock="Left" Text="Ethernet · TCP · CRLF" Style="{StaticResource Muted}" />
             <TextBlock x:Name="AccelModeText" DockPanel.Dock="Right" Text="정지" Style="{StaticResource Muted}" />
         </DockPanel>
     </Grid>

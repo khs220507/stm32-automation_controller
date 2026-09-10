@@ -65,7 +65,7 @@ try {
 
     Write-Host '[4/4] WPF 실행'
     Start-Process -FilePath $appExe -WorkingDirectory (Split-Path $appExe -Parent)
-    Write-Host '완료. WPF에서 COM 연결 후 SLEEP 해제·확인을 누르세요.'
+    Write-Host '완료. WPF에서 169.254.100.2:5000 TCP 연결 후 요청·응답 확인을 누르세요.'
 }
 catch {
     Write-Host "실패: $($_.Exception.Message)" -ForegroundColor Red

@@ -1,0 +1,28 @@
+﻿Capture time: 2026-09-10T11:37:15.4883698+09:00 DWM backdrop: 2
+ConnectionStatusText 169.254.100.2:5000 연결됨
+UartStatusText 요청·응답 확인됨 (PONG)
+MpuStatusText 확인 전
+SensorStatusText 확인 전
+W5500StatusText W5500 버전 확인됨
+W5500VersionText 버전 값: 0x04 · 기대값: 0x04
+MpuWakeStatusText 확인 전
+AccelXText -0.555 g
+AccelYText 0.030 g
+AccelZText 0.864 g
+AccelStatusText 측정값 수신됨 · ±2g 환산
+ 11:36:40.062 [RX      ] OK,PING,PONG<CR><LF>
+ 11:36:40.024 [TX      ] PING<CR><LF>
+ 11:36:41.704 [RX      ] OK,READ_ACCEL,-9088,485,14155<CR><LF>
+ 11:36:41.688 [TX      ] READ_ACCEL<CR><LF>
+ 11:36:41.457 [RX      ] OK,READ_ACCEL,-9069,419,14150<CR><LF>
+ 11:36:41.439 [TX      ] READ_ACCEL<CR><LF>
+ 11:36:41.209 [RX      ] OK,READ_ACCEL,-9051,486,14135<CR><LF>
+ 11:36:41.188 [TX      ] READ_ACCEL<CR><LF>
+ 11:36:40.941 [RX      ] OK,READ_ACCEL,-9050,432,14080<CR><LF>
+ 11:36:40.924 [TX      ] READ_ACCEL<CR><LF>
+ 11:36:40.703 [RX      ] OK,CONFIG_ACCEL,2G<CR><LF>
+ 11:36:40.678 [TX      ] CONFIG_ACCEL<CR><LF>
+ 11:36:40.361 [RX      ] OK,CHECK_W5500,4<CR><LF>
+ 11:36:40.348 [TX      ] CHECK_W5500<CR><LF>
+ 11:36:39.455 [INFO    ] TCP 연결됨: 169.254.100.2:5000
+ 11:35:28.798 [INFO    ] LAN 준비 완료. 보드 IP와 TCP 포트를 확인하고 연결하세요.

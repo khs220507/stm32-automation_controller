@@ -1,7 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
-using System.IO.Ports;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
@@ -12,7 +13,6 @@ namespace UltrasonicMonitor;
 
 public partial class MainWindow : Window
 {
-    private static readonly TimeSpan InterByteTimeout = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan ResponseTimeout = TimeSpan.FromMilliseconds(500);
     private readonly ObservableCollection<string> _logEntries = [];
     private readonly ObservableCollection<string> _uartLogEntries = [];
@@ -20,7 +20,6 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<string> _ultrasonicLogEntries = [];
     private readonly ObservableCollection<string> _w5500LogEntries = [];
     private readonly AsciiLineBuffer _lineBuffer = new(maxLineLength: 64);
-    private readonly DispatcherTimer _receiveTimeoutTimer;
     private readonly DispatcherTimer _sensorPollTimer;
     private bool _ultrasonicRepeating;
     private bool _mpuRepeating;
@@ -28,8 +27,8 @@ public partial class MainWindow : Window
     private bool _accelNeedsConfiguration;
     private bool _mpuTurn;
     private bool _connected;
-    private SerialPort? _serialPort;
-    private DateTime _lastByteReceivedUtc;
+    private TcpClient? _tcpClient;
+    private CancellationTokenSource? _connectionCancellation;
     private CancellationTokenSource? _responseTimeoutCancellation;
     private string? _pendingCommand;
 
@@ -42,97 +41,64 @@ public partial class MainWindow : Window
         MpuLogListBox.ItemsSource = _mpuLogEntries;
         UltrasonicLogListBox.ItemsSource = _ultrasonicLogEntries;
         W5500LogListBox.ItemsSource = _w5500LogEntries;
-        _receiveTimeoutTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
-        _receiveTimeoutTimer.Tick += ReceiveTimeoutTimer_Tick;
-        // 각 센서의 실행 여부는 독립적이며 UART 요청만 번갈아 처리한다.
         _sensorPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _sensorPollTimer.Tick += (_, _) => RunSensorScheduler();
-        RefreshPorts();
-        AppendLog("INFO", "앱 준비 완료. NUCLEO의 ST-LINK Virtual COM Port를 선택하세요.");
+        AppendLog("INFO", "LAN 준비 완료. 보드 IP와 TCP 포트를 확인하고 연결하세요.");
     }
 
-    private void RefreshPorts_Click(object sender, RoutedEventArgs e) => RefreshPorts();
-
-    private void RefreshPorts()
+    private async void Connect_Click(object sender, RoutedEventArgs e)
     {
-        string? selectedPort = PortComboBox.SelectedItem as string;
-        string[] portNames = SerialPort.GetPortNames();
-        Array.Sort(portNames, StringComparer.OrdinalIgnoreCase);
-        PortComboBox.ItemsSource = portNames;
-        PortComboBox.SelectedItem = selectedPort is not null && portNames.Contains(selectedPort)
-            ? selectedPort
-            : portNames.FirstOrDefault();
-        AppendLog("INFO", portNames.Length == 0
-            ? "사용 가능한 COM 포트가 없습니다."
-            : $"COM 포트 검색: {string.Join(", ", portNames)}");
+        if (_tcpClient is not null) { Disconnect(); return; }
+        if (!IPAddress.TryParse(HostTextBox.Text.Trim(), out var address) ||
+            address.AddressFamily != AddressFamily.InterNetwork ||
+            !int.TryParse(TcpPortTextBox.Text, out int port) || port is < 1 or > 65535)
+        {
+            AppendLog("ERROR", "IPv4 주소와 1~65535 범위의 포트를 입력하세요.");
+            return;
+        }
+        await ConnectTcpAsync(address, port);
     }
 
-    private void Connect_Click(object sender, RoutedEventArgs e)
+    private async Task ConnectTcpAsync(IPAddress address, int port)
     {
-        if (_serialPort?.IsOpen == true)
-        {
-            Disconnect();
-            return;
-        }
-
-        if (PortComboBox.SelectedItem is not string portName)
-        {
-            MessageBox.Show(this, "연결할 COM 포트를 선택하세요.", "COM 포트",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
+        Disconnect();
+        var client = new TcpClient { NoDelay = true };
+        var cancellation = new CancellationTokenSource();
+        _tcpClient = client;
+        _connectionCancellation = cancellation;
+        HostTextBox.IsEnabled = TcpPortTextBox.IsEnabled = false;
+        ConnectButton.Content = "취소";
+        ConnectionStatusText.Text = "TCP 연결 중…";
         try
         {
-            var serialPort = new SerialPort(portName, 115200, Parity.None, 8, StopBits.One)
-            {
-                Encoding = Encoding.ASCII,
-                Handshake = Handshake.None,
-                NewLine = "\r\n",
-                ReadTimeout = 50,
-                WriteTimeout = 500,
-                DtrEnable = false,
-                RtsEnable = false,
-            };
-            serialPort.DataReceived += SerialPort_DataReceived;
-            serialPort.ErrorReceived += SerialPort_ErrorReceived;
-            serialPort.Open();
-            _serialPort = serialPort;
-            SetConnectionState(true, portName);
-            AppendLog("INFO", $"{portName} 연결됨 (115200, 8-N-1, CRLF)");
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(3));
+            await client.ConnectAsync(address, port, deadline.Token);
+            if (!ReferenceEquals(_tcpClient, client)) return;
+            SetConnectionState(true, $"{address}:{port}");
+            AppendLog("INFO", $"TCP 연결됨: {address}:{port}");
+            _ = ReceiveTcpAsync(client, cancellation.Token);
         }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or ArgumentException)
+        catch (Exception exception) when (exception is SocketException or IOException or OperationCanceledException or ObjectDisposedException)
         {
-            AppendLog("ERROR", $"연결 실패: {exception.Message}");
-            MessageBox.Show(this, exception.Message, "시리얼 연결 실패",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            if (!ReferenceEquals(_tcpClient, client)) return;
+            Disconnect();
+            AppendLog("ERROR", $"TCP 연결 실패: {exception.Message}");
         }
     }
 
     private void Disconnect()
     {
-        StopUltrasonic();
+        var client = _tcpClient;
+        _tcpClient = null;
+        _connectionCancellation?.Cancel();
+        _connectionCancellation?.Dispose();
+        _connectionCancellation = null;
+        client?.Dispose();
         CancelPendingCommand();
-        _receiveTimeoutTimer.Stop();
         _lineBuffer.Reset();
-        if (_serialPort is not null)
-        {
-            string portName = _serialPort.PortName;
-            _serialPort.DataReceived -= SerialPort_DataReceived;
-            _serialPort.ErrorReceived -= SerialPort_ErrorReceived;
-            try
-            {
-                if (_serialPort.IsOpen) _serialPort.Close();
-            }
-            catch (IOException exception)
-            {
-                AppendLog("ERROR", $"포트 닫기 실패: {exception.Message}");
-            }
-            _serialPort.Dispose();
-            _serialPort = null;
-            AppendLog("INFO", $"{portName} 연결 해제됨");
-        }
         SetConnectionState(false, null);
+        if (client is not null) AppendLog("INFO", "TCP 연결 해제됨");
     }
 
     private void SetConnectionState(bool connected, string? portName)
@@ -143,7 +109,7 @@ public partial class MainWindow : Window
             ? Color.FromRgb(29, 125, 79)
             : Color.FromRgb(82, 97, 107));
         ConnectButton.Content = connected ? "연결 해제" : "연결";
-        PortComboBox.IsEnabled = !connected;
+        HostTextBox.IsEnabled = TcpPortTextBox.IsEnabled = !connected;
         ResetDiagnosticDisplays(connected ? "확인 전" : "연결 안 됨");
         UpdateTestButtons();
     }
@@ -343,34 +309,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SendCommand(string command)
+    private async void SendCommand(string command)
     {
-        if (_serialPort?.IsOpen != true)
+        var client = _tcpClient;
+        if (!_connected || client is null)
         {
-            AppendLog("ERROR", "COM 포트가 연결되지 않았습니다.", command);
-            ShowCommandFailure(command, "COM 포트 연결을 확인하세요");
+            AppendLog("ERROR", "TCP 연결이 필요합니다.", command);
+            ShowCommandFailure(command, "TCP 연결을 확인하세요");
             return;
         }
-        if (_pendingCommand is not null)
-        {
-            AppendLog("WARN", $"{_pendingCommand} 응답 대기 중이므로 {command} 송신을 보류했습니다.", command);
-            return;
-        }
-
+        if (_pendingCommand is not null) return;
+        _pendingCommand = command;
+        BeginCommandDisplay(command);
+        _responseTimeoutCancellation = new CancellationTokenSource();
+        var token = _responseTimeoutCancellation.Token;
+        _ = WaitForResponseTimeoutAsync(command, token);
         try
         {
-            _serialPort.Write(command + "\r\n");
             AppendLog("TX", command + "<CR><LF>", command);
-            _pendingCommand = command;
-            BeginCommandDisplay(command);
-            _responseTimeoutCancellation = new CancellationTokenSource();
-            _ = WaitForResponseTimeoutAsync(command, _responseTimeoutCancellation.Token);
+            await client.GetStream().WriteAsync(Encoding.ASCII.GetBytes(command + "\r\n"), token);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
+        catch (Exception exception) when (exception is IOException or SocketException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
         {
-            AppendLog("ERROR", $"송신 실패: {exception.Message}", command);
-            ShowCommandFailure(command, "명령 송신 실패");
-            CancelPendingCommand();
+            if (!ReferenceEquals(_tcpClient, client) || token.IsCancellationRequested) return;
+            Disconnect();
+            AppendLog("ERROR", $"TCP 송신 실패: {exception.Message}", command);
+            ShowCommandFailure(command, "TCP 송신 실패 · 다시 연결하세요");
         }
     }
 
@@ -382,55 +346,41 @@ public partial class MainWindow : Window
         if (_pendingCommand == command)
         {
             AppendLog("TIMEOUT", $"{command} 응답이 500 ms 안에 도착하지 않았습니다.", command);
+            if (_tcpClient is not null) Disconnect();
             ShowCommandFailure(command, "보드 응답 없음 (500 ms)");
             CancelPendingCommand();
         }
     }
 
-    private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+    private async Task ReceiveTcpAsync(TcpClient client, CancellationToken cancellationToken)
     {
+        byte[] bytes = new byte[512];
+        string reason = "보드가 TCP 연결을 종료했습니다.";
         try
         {
-            string chunk = ((SerialPort)sender).ReadExisting();
-            if (chunk.Length == 0) return;
-            DateTime receivedUtc = DateTime.UtcNow;
-            Dispatcher.InvokeAsync(() =>
+            var stream = client.GetStream();
+            while (true)
             {
-                // 이전 연결에서 큐에 남은 수신으로 새 연결의 진단 결과를 덮어쓰지 않는다.
-                if (!ReferenceEquals(sender, _serialPort)) return;
-                _lastByteReceivedUtc = receivedUtc;
-                LineBufferResult result = _lineBuffer.Append(chunk);
-                _receiveTimeoutTimer.Start();
-                for (int index = 0; index < result.OverflowCount; index++)
+                int count = await stream.ReadAsync(bytes, cancellationToken);
+                if (!ReferenceEquals(_tcpClient, client)) return;
+                if (count == 0) break;
+                LineBufferResult result = _lineBuffer.Append(Encoding.ASCII.GetString(bytes, 0, count));
+                for (int i = 0; i < result.OverflowCount; ++i)
                     AppendLog("RX-ERROR", "64바이트를 초과한 라인을 폐기했습니다.");
                 foreach (string line in result.Lines) HandleReceivedLine(line);
-            });
+            }
         }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException)
+        catch (Exception exception) when (exception is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
         {
-            Dispatcher.InvokeAsync(() => AppendLog("ERROR", $"수신 실패: {exception.Message}"));
+            reason = $"TCP 수신 종료: {exception.Message}";
         }
+        if (!ReferenceEquals(_tcpClient, client)) return;
+        string? pending = _pendingCommand;
+        Disconnect();
+        AppendLog("ERROR", reason);
+        if (pending is not null) ShowCommandFailure(pending, "TCP 연결 끊김 · 다시 연결하세요");
     }
 
-    private void SerialPort_ErrorReceived(object sender, SerialErrorReceivedEventArgs e) =>
-        Dispatcher.InvokeAsync(() => AppendLog("SERIAL", $"시리얼 오류: {e.EventType}"));
-
-    private void ReceiveTimeoutTimer_Tick(object? sender, EventArgs e)
-    {
-        if (!_lineBuffer.HasPendingData)
-        {
-            _receiveTimeoutTimer.Stop();
-            return;
-        }
-        if (DateTime.UtcNow - _lastByteReceivedUtc >= InterByteTimeout)
-        {
-            _lineBuffer.Reset();
-            _receiveTimeoutTimer.Stop();
-            AppendLog("RX-ERROR", "불완전한 라인을 50 ms 바이트 간 시간초과로 폐기했습니다.");
-        }
-    }
-
-    // 수신 흐름: 한 줄 해석 → 로그 기록 → 요청 일치 확인 → 화면 갱신 → 대기 해제.
     private void HandleReceivedLine(string line)
     {
         ProtocolMessage message = AsciiProtocolParser.Parse(line);

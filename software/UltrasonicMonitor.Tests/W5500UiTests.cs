@@ -75,7 +75,7 @@ public sealed class W5500UiTests
             Assert.IsTrue(log.Items.Cast<string>().Any(x => x.Contains("OK,CHECK_W5500,255")));
             Assert.IsFalse(((ListBox)w.FindName("UartLogListBox")).Items.Cast<string>().Any(x => x.Contains("CHECK_W5500")));
             Call(w, "W5500CheckButton_Click", button, new RoutedEventArgs());
-            StringAssert.Contains(Text(w, "W5500StatusText"), "COM 포트");
+            StringAssert.Contains(Text(w, "W5500StatusText"), "TCP 연결");
         }
         finally { w.Close(); }
     }

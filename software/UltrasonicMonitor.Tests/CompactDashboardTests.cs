@@ -28,7 +28,7 @@ public sealed class CompactDashboardTests
             Call(w, "ShowCommandFailure", "CHECK_W5500", "이전 SPI 전송 상태가 남아 있음 · 보드 재시작 필요");
             var size = new Size(width, height);
             root.Measure(size); root.Arrange(new Rect(size)); root.UpdateLayout();
-            foreach (string name in new[] { "PortComboBox", "ConnectButton", "UartCheckButton",
+            foreach (string name in new[] { "HostTextBox", "TcpPortTextBox", "ConnectButton", "UartCheckButton",
                 "MpuStartButton", "MpuStopButton", "StartButton", "StopButton", "W5500CheckButton",
                 "MpuWakeButton", "AccelStartButton", "AccelStopButton", "AccelZText", "AccelModeText",
                 "UartLogListBox", "MpuLogListBox", "UltrasonicLogListBox", "W5500LogListBox", "LogListBox" })

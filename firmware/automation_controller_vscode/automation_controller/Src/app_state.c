@@ -9,7 +9,7 @@
 #include "mpu6050.h"
 #include "protocol.h"
 #include "timebase.h"
-#include "uart2.h"
+#include "tcp_link.h"
 #include "w5500.h"
 
 #define HCSR04_MEASUREMENT_PERIOD_US 100000U
@@ -32,6 +32,7 @@ static hcsr04_measurement_t latest_hcsr04_measurement;
 static uint32_t hcsr04_last_measurement_time_us;
 static bool i2c_prepared;
 static bool hcsr04_prepared;
+static uint32_t network_session;
 
 static const char *app_state_name(system_state_t state);
 static void app_state_run_auto(protocol_command_t command);
@@ -51,6 +52,7 @@ void app_state_init(void)
     i2c_prepared = false;
     mpu6050_accel_invalidate();
     hcsr04_prepared = false;
+    network_session = 0U;
 }
 
 void app_state_run(void)
@@ -63,13 +65,27 @@ void app_state_run(void)
         /* 대시보드 공통 연결만 준비한다. 센서는 개별 시험 요청 때 초기화한다.
          * I2C BUSY나 센서 미연결이 다른 시험의 기동을 막지 않게 한다. */
         timebase_init();
-        uart2_init();
+        tcp_link_init();
         protocol_init();
         protocol_send_ready();
         current_state = STATE_IDLE;
         return;
     }
 
+    tcp_link_poll();
+    if (network_session != tcp_link_session())
+    {
+        network_session = tcp_link_session();
+        protocol_init();
+        if (!tcp_link_connected())
+        {
+            board_io_set_safe_outputs();
+            app_state_clear_measurement();
+            mpu6050_accel_invalidate();
+            current_state = STATE_IDLE;
+        }
+    }
+    if (!tcp_link_connected()) return;
     command = protocol_poll_command();
     if (command == PROTOCOL_COMMAND_CHECK_W5500)
     {
