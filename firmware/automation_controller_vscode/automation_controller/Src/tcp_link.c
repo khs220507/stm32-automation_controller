@@ -131,15 +131,19 @@ void tcp_link_abort(void) { abort_pending = true; }
 
 void tcp_link_poll(void)
 {
+    /* W5500 제어 오류는 재부팅 전까지 차단. */
     if (tcp_link_status == TCP_IO_FAULT) return;
+    /* 연결 중 1 ms, 연결 전 10 ms 간격으로 처리. */
     if (timebase_elapsed_us(last_poll) < (connected ? 1000U : 10000U)) return;
     last_poll = timebase_now_us();
+    /* 모듈 준비 후 네트워크를 한 번 설정. */
     if (!configured)
     {
         if (!w5500_ready()) return;
         if (!configure()) return;
     }
     uint8_t phy, state, flags;
+    /* PHYCFGR LNK[0]=0이면 연결 정리. 제어 오류 상태는 보존. */
     if (!read_bytes(0U, 0x002EU, &phy, 1U)) return;
     if ((phy & (0x1U << 0)) == 0U)
     {
@@ -149,12 +153,14 @@ void tcp_link_poll(void)
     }
     if (abort_pending) { close_socket(); return; }
     if (!read_bytes(1U, 0x0003U, &state, 1U)) return;
+    /* 상태가 바뀔 때만 대기 시작 시각 갱신. */
     if (state != previous_state)
     {
         previous_state = state;
         state_started = timebase_now_us();
     }
     if (state != 0x17U && connected) clear_session();
+    /* CLOSED(00) → INIT(13) → LISTEN(14) → ESTABLISHED(17). */
     if (state == 0x00U)
     {
         clear_session();
@@ -164,6 +170,7 @@ void tcp_link_poll(void)
     }
     if (state == 0x13U) { if (command(0x02U)) tcp_link_status = TCP_LISTENING; return; }
     if (state == 0x14U) return;
+    /* SYNRECV(16): 연결 협상이 2초를 넘으면 종료. */
     if (state == 0x16U)
     {
         if (timebase_elapsed_us(state_started) >= 2000000U) close_socket();
@@ -175,6 +182,7 @@ void tcp_link_poll(void)
         clear_session(); connected = true; ++session;
         tcp_link_status = TCP_CONNECTED;
     }
+    /* Sn_IR: TIMEOUT[3]은 종료, SENDOK[4]는 1을 써서 해제. */
     if (!read_bytes(1U, 0x0002U, &flags, 1U)) return;
     if ((flags & (0x1U << 3)) != 0U) { close_socket(); return; }
     if (sending)
@@ -186,7 +194,9 @@ void tcp_link_poll(void)
         }
         else if (timebase_elapsed_us(send_started) >= 2000000U) { close_socket(); return; }
     }
+    /* 송신 공간 대기도 2초로 제한. */
     if (tx_size != 0U && timebase_elapsed_us(queue_started) >= 2000000U) { close_socket(); return; }
+    /* W5500 버퍼에 복사 → 쓰기 포인터 갱신 → SEND 요청. */
     if (!sending && tx_size != 0U)
     {
         uint16_t free_size, pointer;
@@ -201,6 +211,7 @@ void tcp_link_poll(void)
             tx_size = 0U;
         }
     }
+    /* 이전 수신을 다 읽었으면 다음 데이터를 가져오고 RECV로 소비를 알림. */
     if (rx_position == rx_size)
     {
         uint16_t available, pointer;
