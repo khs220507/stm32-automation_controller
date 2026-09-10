@@ -13,6 +13,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/system_stm32f4xx.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/timebase.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/uart2.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/uart_diag.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/w5500.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/tcp_link.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Startup/startup_stm32f401retx.s"

@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeUartDiagnostics();
         SetMpuDisplay("확인 전");
         LogListBox.ItemsSource = _logEntries;
         UartLogListBox.ItemsSource = _uartLogEntries;
@@ -607,7 +608,8 @@ public partial class MainWindow : Window
         listBox.ScrollIntoView(entries[0]);
     }
 
-    private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => Disconnect();
+    private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    { CloseUartDiagnostics(); Disconnect(); }
 
     private void ClearAccelDisplay(string status, bool failed = false)
     {

@@ -11,6 +11,7 @@
 #include "timebase.h"
 #include "tcp_link.h"
 #include "w5500.h"
+#include "uart_diag.h"
 
 #define HCSR04_MEASUREMENT_PERIOD_US 100000U
 /* I2C 전송 1회 한도. 실기 검증 전 임시값 10 ms.
@@ -65,6 +66,7 @@ void app_state_run(void)
         /* 대시보드 공통 연결만 준비한다. 센서는 개별 시험 요청 때 초기화한다.
          * I2C BUSY나 센서 미연결이 다른 시험의 기동을 막지 않게 한다. */
         timebase_init();
+        uart_diag_init();
         tcp_link_init();
         protocol_init();
         protocol_send_ready();
@@ -72,6 +74,7 @@ void app_state_run(void)
         return;
     }
 
+    uart_diag_poll();
     tcp_link_poll();
     if (network_session != tcp_link_session())
     {

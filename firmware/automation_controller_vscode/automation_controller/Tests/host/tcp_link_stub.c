@@ -1,5 +1,8 @@
 #include "tcp_link.h"
 #include "uart2.h"
+#include "uart_diag.h"
+void uart_diag_init(void) { }
+void uart_diag_poll(void) { }
 volatile tcp_status_t tcp_link_status;
 void tcp_link_init(void) { uart2_init(); }
 void tcp_link_poll(void) { }
