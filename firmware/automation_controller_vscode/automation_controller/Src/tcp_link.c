@@ -343,21 +343,38 @@ void tcp_link_poll(void)
         }
     }
 
-    /* 이전 수신을 다 읽었으면 다음 데이터를 가져오고 RECV로 소비를 알림. */
+    /* 이전 데이터를 다 읽었으면 다음 수신 처리. */
     if (rx_position == rx_size)
     {
         uint16_t available, pointer;
 
-        if (!stable_word(0x0026U, &available) || available == 0U)
+        /* 도착한 데이터 길이 확인. */
+        if (!stable_word(0x0026U, &available))
             return;
 
+        if (available == 0U)
+            return;
+
+        /* STM32 버퍼에 들어갈 만큼만 읽기. */
         if (available > sizeof(rx))
             available = sizeof(rx);
-        if (!read_word(0x0028U, &pointer) ||
-            !read_bytes(3U, pointer, rx, available) ||
-            !write_word(0x0028U, (uint16_t)(pointer + available)) ||
-            !command(0x40U))
+
+        /* 읽을 위치 확인. */
+        if (!read_word(0x0028U, &pointer))
             return;
+
+        /* W5500에서 STM32 버퍼로 복사. */
+        if (!read_bytes(3U, pointer, rx, available))
+            return;
+
+        /* 읽은 만큼 읽기 위치 이동. */
+        if (!write_word(0x0028U, (uint16_t)(pointer + available)))
+            return;
+
+        /* RECV: W5500에 데이터를 가져갔다고 알림. */
+        if (!command(0x40U))
+            return;
+
         rx_size = available;
         rx_position = 0U;
     }
