@@ -24,7 +24,7 @@ public sealed class MpuWakeUiTests
                 content.UpdateLayout();
             }
             Layout();
-            var dashboard = (System.Windows.FrameworkElement)((ScrollViewer)content).Content;
+            var dashboard = content;
             double initialHeight = dashboard.ActualHeight;
             foreach (string command in new[] { "PING", "CHECK_MPU6050", "CHECK_HCSR04", "SYSTEM" })
                 for (int i = 0; i < 150; i++) Call(w, "AppendLog", "RX", $"{i}: test response", command);

@@ -1,203 +1,280 @@
 <Window x:Class="UltrasonicMonitor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="STM32 통신 시험 대시보드"
-        Width="1380" Height="960" MinWidth="1000" MinHeight="740" WindowState="Maximized"
-        Background="#F3F6F8" Closing="Window_Closing">
+        Title="STM32 · 통신 모니터" ThemeMode="Light"
+        Width="1240" Height="820" MinWidth="1000" MinHeight="740"
+        WindowStartupLocation="CenterScreen" Closing="Window_Closing"
+        FontFamily="Segoe UI, Malgun Gothic" FontSize="12"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Window.Resources>
-        <Style x:Key="LogStyle" TargetType="ListBox">
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="#101820" />
-            <Setter Property="Foreground" Value="#D9E7EE" />
-            <Setter Property="FontFamily" Value="Consolas" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
-        </Style>
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="#D8E0E5" />
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#BCFFFFFF" />
+            <Setter Property="BorderBrush" Value="#18000000" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="18" />
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="MinHeight" Value="34" />
-            <Setter Property="Padding" Value="12,6" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="14,12" />
         </Style>
         <Style TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Malgun Gothic" />
+            <Setter Property="Foreground" Value="#20242A" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
-        <Style x:Key="TestResultStyle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Malgun Gothic" />
-            <Setter Property="FontSize" Value="18" />
+        <Style x:Key="Muted" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="#69717B" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="Status" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Foreground" Value="#52616B" />
-            <Setter Property="MinHeight" Value="74" />
-            <Setter Property="Margin" Value="0,14,0,4" />
+        </Style>
+        <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#CCFFFFFF" />
+            <Setter Property="Foreground" Value="#20242A" />
+            <Setter Property="BorderBrush" Value="#28000000" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F5F8FC" /><Setter Property="BorderBrush" Value="#550067C0" /></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Background" Value="#E5EFF8" /></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="#0067C0" /></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Background" Value="#70FFFFFF" /><Setter Property="Foreground" Value="#949AA0" /><Setter Property="BorderBrush" Value="#14000000" /></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="Button" BasedOn="{StaticResource CompactButton}" />
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">
+            <Setter Property="Background" Value="#0067C0" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#0067C0" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#1977C9" /></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Background" Value="#00569F" /></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Background" Value="#C9DCEC" /><Setter Property="Foreground" Value="#70889F" /></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LogStyle" TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#46515D" />
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="Padding" Value="3,2" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="ToolTip" Value="{Binding}" />
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                   TextWrapping="Wrap" TextTrimming="None" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <Grid Margin="22" MinHeight="820">
+    <Grid x:Name="DashboardRoot" Margin="16,0,16,12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="60" />
+            <RowDefinition Height="190" />
+            <RowDefinition Height="148" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="22" />
         </Grid.RowDefinitions>
-        <DockPanel Grid.Row="0" Margin="0,0,0,16" LastChildFill="False">
-            <StackPanel DockPanel.Dock="Left">
-                <TextBlock FontSize="25" FontWeight="SemiBold" Text="STM32 통신 시험 대시보드" />
-                <TextBlock Margin="0,4,0,0" Foreground="#5F6B73"
-                           Text="두 센서의 반복 시험을 각각 시작하고 정지할 수 있습니다." />
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="32" Height="32" Background="#160067C0" CornerRadius="8" Margin="0,0,10,0">
+                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE968;" FontSize="17" Foreground="#0067C0"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="통신 모니터" FontWeight="SemiBold" FontSize="19" />
+                    <TextBlock Text="STM32 NUCLEO-F401RE" Style="{StaticResource Muted}" />
+                </StackPanel>
             </StackPanel>
-            <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="12,6" CornerRadius="14" Background="#E7EEF2">
-                <TextBlock x:Name="ConnectionStatusText" FontWeight="SemiBold" Foreground="#52616B" Text="연결 안 됨" />
-            </Border>
-        </DockPanel>
-        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,14">
-            <DockPanel LastChildFill="False">
-                <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold" Text="COM 포트" />
-                <ComboBox x:Name="PortComboBox" DockPanel.Dock="Left" Width="150" Height="34" Margin="0,0,8,0" VerticalContentAlignment="Center" />
-                <Button DockPanel.Dock="Left" Click="RefreshPorts_Click" Content="새로 고침" />
-                <Button x:Name="ConnectButton" DockPanel.Dock="Left" Click="Connect_Click" Content="연결" />
-            </DockPanel>
-        </Border>
-        <Grid Grid.Row="2" Margin="0,0,0,14">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="#70FFFFFF" CornerRadius="12" Padding="10,5" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="ConnectionStatusText" Text="연결 안 됨" FontSize="11" Foreground="#52616B" />
+                </Border>
+                <ComboBox x:Name="PortComboBox" Width="104" MinHeight="30" Margin="0,0,6,0"
+                          VerticalContentAlignment="Center" AutomationProperties.Name="COM 포트" />
+                <Button Click="RefreshPorts_Click" Content="새로 고침" />
+                <Button x:Name="ConnectButton" Click="Connect_Click" Content="연결" Style="{StaticResource AccentButton}" Margin="0" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock FontSize="19" FontWeight="SemiBold" Text="UART" />
-                    <TextBlock Margin="0,4,0,0" Foreground="#687780" Text="USB · USART2 요청 / 응답" />
-                    <TextBlock x:Name="UartStatusText" Style="{StaticResource TestResultStyle}" Text="확인 전" />
-                    <TextBlock Foreground="#687780" Text="추가 센서 배선 없이 확인" />
-                    <Button x:Name="UartCheckButton" Margin="0,18,0,12" HorizontalAlignment="Left"
-                            Click="UartCheckButton_Click" Content="요청·응답 확인" IsEnabled="False" />
-                    <TextBlock x:Name="UartLastCheckText" Foreground="#687780" Text="확인 이력 없음" TextWrapping="Wrap" />
-                </StackPanel>
+            <Border Grid.Column="0" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="22" /><RowDefinition Height="48" /><RowDefinition Height="18" /><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock Text="UART" Style="{StaticResource Heading}" />
+                    <TextBlock x:Name="UartStatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Status}" />
+                    <TextBlock Grid.Row="2" Text="USB · USART2" Style="{StaticResource Muted}" />
+                    <Button x:Name="UartCheckButton" Grid.Row="3" Content="요청·응답 확인" HorizontalAlignment="Left"
+                            VerticalAlignment="Top" Click="UartCheckButton_Click" IsEnabled="False" />
+                    <TextBlock x:Name="UartLastCheckText" Grid.Row="4" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
+                </Grid>
             </Border>
-            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock FontSize="19" FontWeight="SemiBold" Text="I2C · MPU6050" />
-                    <TextBlock Margin="0,4,0,0" Foreground="#687780" Text="식별 레지스터 확인" />
-                    <TextBlock x:Name="MpuStatusText" Style="{StaticResource TestResultStyle}" Text="확인 전" />
-                    <TextBlock x:Name="MpuIdentityText" Foreground="#687780" Text="식별값: —" TextWrapping="Wrap" />
-                    <WrapPanel Margin="0,18,0,12">
-                        <Button x:Name="MpuStartButton" Click="MpuStartButton_Click" Content="시작" IsEnabled="False" />
-                        <Button x:Name="MpuStopButton" Click="MpuStopButton_Click" Content="정지" IsEnabled="False" />
-                    </WrapPanel>
-                    <TextBlock x:Name="MpuModeText" Foreground="#687780" Text="정지" />
-                    <TextBlock x:Name="MpuLastCheckText" Foreground="#687780" Text="확인 이력 없음" TextWrapping="Wrap" />
-                    <Separator Margin="0,12,0,8" />
-                    <Button x:Name="MpuWakeButton" Click="MpuWakeButton_Click" Content="SLEEP 해제·확인"
-                            HorizontalAlignment="Left" IsEnabled="False" />
-                    <TextBlock x:Name="MpuWakeStatusText" Margin="0,8,0,4" Text="SLEEP 설정 확인 전"
-                               TextWrapping="Wrap" Foreground="#52616B" />
-                    <TextBlock x:Name="MpuPowerText" Text="변경 전: — → 확인값: —" TextWrapping="Wrap" Foreground="#687780" />
-                    <TextBlock x:Name="MpuWakeTimeText" Text="확인 이력 없음" TextWrapping="Wrap" Foreground="#687780" />
-                </StackPanel>
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="22" /><RowDefinition Height="48" /><RowDefinition Height="18" /><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock Text="I2C · MPU6050" Style="{StaticResource Heading}" />
+                    <TextBlock x:Name="MpuStatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Status}" />
+                    <TextBlock x:Name="MpuIdentityText" Grid.Row="2" Text="식별값: —" Style="{StaticResource Muted}" />
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button x:Name="MpuStartButton" Content="시작" Click="MpuStartButton_Click" IsEnabled="False" />
+                        <Button x:Name="MpuStopButton" Content="정지" Click="MpuStopButton_Click" IsEnabled="False" />
+                        <TextBlock x:Name="MpuModeText" Text="정지" Style="{StaticResource Muted}" VerticalAlignment="Center" Width="65" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                    </StackPanel>
+                    <TextBlock x:Name="MpuLastCheckText" Grid.Row="4" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
+                </Grid>
             </Border>
-            <Border Grid.Column="4" Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock FontSize="19" FontWeight="SemiBold" Text="초음파 · HC-SR04" />
-                    <TextBlock Margin="0,4,0,0" Foreground="#687780" Text="GPIO / 타이머 펄스 측정" />
-                    <TextBlock x:Name="SensorStatusText" Style="{StaticResource TestResultStyle}" Text="확인 전" />
-                    <WrapPanel>
-                        <TextBlock Text="거리 " Foreground="#687780" />
-                        <TextBlock x:Name="DistanceText" FontWeight="SemiBold" Text="—" />
-                        <TextBlock Text=" cm    펄스 " Foreground="#687780" />
-                        <TextBlock x:Name="PulseText" FontWeight="SemiBold" Text="—" />
-                        <TextBlock Text=" µs" Foreground="#687780" />
-                    </WrapPanel>
-                    <WrapPanel Margin="0,18,0,12">
-                        <Button x:Name="StartButton" Click="StartButton_Click" Content="시작" IsEnabled="False" />
-                        <Button x:Name="StopButton" Click="StopButton_Click" Content="정지" IsEnabled="False" />
-                    </WrapPanel>
-                    <TextBlock x:Name="MeasurementModeText" Foreground="#687780" Text="정지" />
-                    <TextBlock x:Name="SensorLastCheckText" Margin="0,4,0,0" Foreground="#687780" Text="확인 이력 없음" TextWrapping="Wrap" />
-                </StackPanel>
+            <Border Grid.Column="4" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="22" /><RowDefinition Height="48" /><RowDefinition Height="18" /><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock Text="초음파 · HC-SR04" Style="{StaticResource Heading}" />
+                    <TextBlock x:Name="SensorStatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Status}" />
+                    <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <TextBlock x:Name="DistanceText" Text="—" FontWeight="SemiBold" />
+                        <TextBlock Text=" cm   /   " Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PulseText" Text="—" FontWeight="SemiBold" />
+                        <TextBlock Text=" µs" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button x:Name="StartButton" Content="시작" Click="StartButton_Click" IsEnabled="False" />
+                        <Button x:Name="StopButton" Content="정지" Click="StopButton_Click" IsEnabled="False" />
+                        <TextBlock x:Name="MeasurementModeText" Text="정지" Style="{StaticResource Muted}" VerticalAlignment="Center" Width="65" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                    </StackPanel>
+                    <TextBlock x:Name="SensorLastCheckText" Grid.Row="4" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="6" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="22" /><RowDefinition Height="48" /><RowDefinition Height="18" /><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock Text="SPI · W5500" Style="{StaticResource Heading}" />
+                    <TextBlock x:Name="W5500StatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Status}" />
+                    <TextBlock x:Name="W5500VersionText" Grid.Row="2" Text="버전 값: — · 기대값: 0x04" Style="{StaticResource Muted}" />
+                    <Button x:Name="W5500CheckButton" Grid.Row="3" Content="W5500 연결 확인" HorizontalAlignment="Left"
+                            VerticalAlignment="Top" Click="W5500CheckButton_Click" IsEnabled="False" />
+                    <TextBlock x:Name="W5500LastCheckText" Grid.Row="4" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
+                </Grid>
             </Border>
         </Grid>
-        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Margin="0,0,0,14" VerticalAlignment="Top">
-            <StackPanel>
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="AccelStartButton" Click="AccelStartButton_Click" Content="가속도 측정 시작" IsEnabled="False" />
-                        <Button x:Name="AccelStopButton" Click="AccelStopButton_Click" Content="정지" IsEnabled="False" />
-                    </StackPanel>
-                    <TextBlock FontSize="19" FontWeight="SemiBold" Text="가속도 · X / Y / Z" />
-                </DockPanel>
-                <TextBlock Margin="0,4,0,10" Foreground="#687780" TextWrapping="Wrap"
-                           Text="±2g · 정지 상태에서도 중력이 측정됩니다. 보드를 천천히 기울이며 축별 변화를 확인하세요." />
-                <UniformGrid Columns="3">
-                    <StackPanel>
-                        <TextBlock Text="X" FontWeight="SemiBold" Foreground="#52616B" />
-                        <TextBlock x:Name="AccelXText" Text="— g" FontSize="30" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AccelXRawText" Text="원시값: —" Foreground="#687780" />
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="Y" FontWeight="SemiBold" Foreground="#52616B" />
-                        <TextBlock x:Name="AccelYText" Text="— g" FontSize="30" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AccelYRawText" Text="원시값: —" Foreground="#687780" />
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="Z" FontWeight="SemiBold" Foreground="#52616B" />
-                        <TextBlock x:Name="AccelZText" Text="— g" FontSize="30" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AccelZRawText" Text="원시값: —" Foreground="#687780" />
-                    </StackPanel>
-                </UniformGrid>
-                <TextBlock x:Name="AccelStatusText" Margin="0,10,0,0" Text="확인 전" TextWrapping="Wrap" Foreground="#52616B" />
-                <WrapPanel Margin="0,4,0,0">
-                    <TextBlock x:Name="AccelModeText" Text="정지" Margin="0,0,16,0" Foreground="#687780" />
-                    <TextBlock x:Name="AccelTimeText" Text="측정 이력 없음" Foreground="#687780" />
-                </WrapPanel>
-            </StackPanel>
-        </Border>
-        <Grid Grid.Row="4" Height="260" VerticalAlignment="Top">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="12" />
-                <RowDefinition Height="85" />
-            </Grid.RowDefinitions>
-            <Grid Grid.Row="0">
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="280" /><ColumnDefinition Width="10" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="32" /><RowDefinition Height="20" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <DockPanel LastChildFill="True">
+                        <Button x:Name="MpuWakeButton" DockPanel.Dock="Right" Content="SLEEP 해제·확인" Click="MpuWakeButton_Click" IsEnabled="False" Margin="0" VerticalAlignment="Top" />
+                        <TextBlock Text="센서 전원" Style="{StaticResource Heading}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock x:Name="MpuWakeStatusText" Grid.Row="1" Text="SLEEP 설정 확인 전" TextWrapping="Wrap" Foreground="#52616B" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="MpuPowerText" Grid.Row="2" Text="변경 전: — → 확인값: —" Style="{StaticResource Muted}" />
+                    <TextBlock x:Name="MpuWakeTimeText" Grid.Row="3" Text="확인 이력 없음" Style="{StaticResource Muted}" VerticalAlignment="Bottom" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="52" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <DockPanel LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button x:Name="AccelStartButton" Content="가속도 측정 시작" Click="AccelStartButton_Click" IsEnabled="False" />
+                            <Button x:Name="AccelStopButton" Content="정지" Click="AccelStopButton_Click" IsEnabled="False" Margin="0" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="가속도" Style="{StaticResource Heading}" />
+                            <TextBlock Text="  ±2g" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DockPanel>
+                    <UniformGrid Grid.Row="1" Columns="3" Margin="0,2,0,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="X" Foreground="#0067C0" FontWeight="SemiBold" Width="20" VerticalAlignment="Center" /><TextBlock x:Name="AccelXText" Text="— g" FontSize="23" FontWeight="SemiBold" /></StackPanel>
+                            <TextBlock x:Name="AccelXRawText" Text="원시값: —" Style="{StaticResource Muted}" Margin="20,0,0,0" />
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="Y" Foreground="#0067C0" FontWeight="SemiBold" Width="20" VerticalAlignment="Center" /><TextBlock x:Name="AccelYText" Text="— g" FontSize="23" FontWeight="SemiBold" /></StackPanel>
+                            <TextBlock x:Name="AccelYRawText" Text="원시값: —" Style="{StaticResource Muted}" Margin="20,0,0,0" />
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="Z" Foreground="#0067C0" FontWeight="SemiBold" Width="20" VerticalAlignment="Center" /><TextBlock x:Name="AccelZText" Text="— g" FontSize="23" FontWeight="SemiBold" /></StackPanel>
+                            <TextBlock x:Name="AccelZRawText" Text="원시값: —" Style="{StaticResource Muted}" Margin="20,0,0,0" />
+                        </StackPanel>
+                    </UniformGrid>
+                    <Grid Grid.Row="2" VerticalAlignment="Bottom">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="AccelStatusText" Text="확인 전" Style="{StaticResource Muted}" />
+                        <TextBlock x:Name="AccelTimeText" Grid.Column="1" Text="측정 이력 없음" Style="{StaticResource Muted}" Margin="8,0,0,0" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="66" /></Grid.RowDefinitions>
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" /><ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" /><ColumnDefinition Width="10" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Style="{StaticResource CardStyle}">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="UART 로그" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" />
-                    </DockPanel>
+                <Border Style="{StaticResource Card}" Padding="10,10,6,6">
+                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="UART 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
                 </Border>
-                <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="MPU6050 로그" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <ListBox x:Name="MpuLogListBox" Style="{StaticResource LogStyle}" />
-                    </DockPanel>
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10,10,6,6">
+                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="MPU6050 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="MpuLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
                 </Border>
-                <Border Grid.Column="4" Style="{StaticResource CardStyle}">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="초음파 로그" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <ListBox x:Name="UltrasonicLogListBox" Style="{StaticResource LogStyle}" />
-                    </DockPanel>
+                <Border Grid.Column="4" Style="{StaticResource Card}" Padding="10,10,6,6">
+                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="초음파 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="UltrasonicLogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
+                </Border>
+                <Border Grid.Column="6" Style="{StaticResource Card}" Padding="10,10,6,6">
+                    <DockPanel><TextBlock DockPanel.Dock="Top" Text="W5500 로그" Style="{StaticResource Muted}" Margin="3,0,0,6" /><ListBox x:Name="W5500LogListBox" Style="{StaticResource LogStyle}" /></DockPanel>
                 </Border>
             </Grid>
-            <Border Grid.Row="2" Style="{StaticResource CardStyle}">
-                <DockPanel>
-                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
-                        <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" Text="연결 · 시스템 로그" />
-                    </DockPanel>
-                    <ListBox x:Name="LogListBox" Style="{StaticResource LogStyle}" />
-                </DockPanel>
+            <Border Grid.Row="1" Style="{StaticResource Card}" Padding="10,6" Margin="0,8,0,0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="105" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="연결 · 시스템" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                    <ListBox x:Name="LogListBox" Grid.Column="1" Style="{StaticResource LogStyle}" />
+                </Grid>
             </Border>
         </Grid>
+        <DockPanel Grid.Row="4" VerticalAlignment="Bottom" LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left" Text="115200 baud · 8N1" Style="{StaticResource Muted}" />
+            <TextBlock x:Name="AccelModeText" DockPanel.Dock="Right" Text="정지" Style="{StaticResource Muted}" />
+        </DockPanel>
     </Grid>
-    </ScrollViewer>
 </Window>

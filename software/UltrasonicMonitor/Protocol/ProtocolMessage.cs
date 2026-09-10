@@ -13,6 +13,7 @@ public enum ProtocolMessageKind
     Mpu6050Wake,
     AccelConfigured,
     Accelerometer,
+    W5500,
 }
 
 public sealed record ProtocolMessage(

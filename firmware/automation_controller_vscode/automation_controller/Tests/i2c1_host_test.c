@@ -7,6 +7,7 @@
 #include "timebase.h"
 #include "uart2.h"
 #include "protocol.h"
+#include "w5500.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,6 +17,9 @@ host_rcc_t host_rcc;
 host_gpio_t host_gpio;
 host_timer_t host_timer;
 uint32_t SystemCoreClock = 16000000U;
+extern spi2_result_t host_w5500_result;
+extern uint8_t host_w5500_version;
+extern unsigned host_w5500_calls;
 const uint8_t APBPrescTable[8] = {0, 0, 0, 0, 1, 2, 3, 4};
 
 enum stage { START, WRITE_ADDRESS, REGISTER, RESTART, READ_ADDRESS, RECEIVE, STOP, DONE, WRITE_DATA };
@@ -531,5 +535,28 @@ int main(void)
     request("WAKE_MPU6050\r\n", "ERR,WAKE_MPU6050,INVALID_STATE\r\n");
     assert(sensor_write_count == 0 && ticks == 0U);
     puts("PASS: wake command read/write/verify, preserved bits, reset guard, failures and IDLE restriction");
+    reset_device();
+    app_state_init();
+    app_state_run();
+    assert(host_w5500_calls == 0U);
+    request("CHECK_W5500\r\n", "OK,CHECK_W5500,4\r\n");
+    host_w5500_version = 255U;
+    request("CHECK_W5500\r\n", "OK,CHECK_W5500,255\r\n");
+    const spi2_result_t failures[] = {SPI2_RESULT_TIMEOUT, SPI2_RESULT_NOT_READY,
+        SPI2_RESULT_HARDWARE_ERROR, SPI2_RESULT_DIRTY_STATE, SPI2_RESULT_INVALID_ARGUMENT};
+    const char *w5500_errors[] = {"TIMEOUT", "NOT_READY", "HARDWARE_ERROR", "DIRTY_STATE", "INTERNAL_ERROR"};
+    for (unsigned i = 0U; i < sizeof(failures) / sizeof(failures[0]); ++i)
+    {
+        char expected[80];
+        host_w5500_result = failures[i];
+        snprintf(expected, sizeof(expected), "ERR,CHECK_W5500,%s\r\n", w5500_errors[i]);
+        request("CHECK_W5500\r\n", expected);
+        request("PING\r\n", "OK,PING,PONG\r\n");
+    }
+    unsigned before_calls = host_w5500_calls;
+    request("START\r\n", "AUTO\r\n");
+    request("CHECK_W5500\r\n", "ERR,CHECK_W5500,INVALID_STATE\r\n");
+    assert(host_w5500_calls == before_calls);
+    puts("PASS: W5500 command/raw version/error response, no boot probe, IDLE restriction");
     return 0;
 }

@@ -10,6 +10,7 @@
 #include "protocol.h"
 #include "timebase.h"
 #include "uart2.h"
+#include "w5500.h"
 
 #define HCSR04_MEASUREMENT_PERIOD_US 100000U
 /* I2C 전송 1회 한도. 실기 검증 전 임시값 10 ms.
@@ -40,6 +41,7 @@ static void app_state_wake_mpu6050(void);
 static const char *app_state_i2c_error(i2c1_result_t result);
 static void app_state_check_hcsr04(void);
 static void app_state_prepare_hcsr04(void);
+static void app_state_check_w5500(void);
 
 void app_state_init(void)
 {
@@ -69,6 +71,14 @@ void app_state_run(void)
     }
 
     command = protocol_poll_command();
+    if (command == PROTOCOL_COMMAND_CHECK_W5500)
+    {
+        if (current_state != STATE_IDLE)
+            protocol_send_error("CHECK_W5500", "INVALID_STATE");
+        else
+            app_state_check_w5500();
+        return;
+    }
     if (command == PROTOCOL_COMMAND_CONFIG_ACCEL || command == PROTOCOL_COMMAND_READ_ACCEL)
     {
         const char *name = command == PROTOCOL_COMMAND_CONFIG_ACCEL ? "CONFIG_ACCEL" : "READ_ACCEL";
@@ -163,6 +173,27 @@ void app_state_run(void)
         current_state = STATE_FAULT;
         break;
     }
+}
+
+static void app_state_check_w5500(void)
+{
+    uint8_t version;
+    spi2_result_t result = w5500_read_version(&version, 100000U);
+    if (result == SPI2_RESULT_OK)
+    {
+        protocol_send_w5500_version(version);
+        return;
+    }
+    const char *error;
+    switch (result)
+    {
+    case SPI2_RESULT_TIMEOUT: error = "TIMEOUT"; break;
+    case SPI2_RESULT_NOT_READY: error = "NOT_READY"; break;
+    case SPI2_RESULT_HARDWARE_ERROR: error = "HARDWARE_ERROR"; break;
+    case SPI2_RESULT_DIRTY_STATE: error = "DIRTY_STATE"; break;
+    default: error = "INTERNAL_ERROR"; break;
+    }
+    protocol_send_error("CHECK_W5500", error);
 }
 
 static void app_state_check_mpu6050(void)

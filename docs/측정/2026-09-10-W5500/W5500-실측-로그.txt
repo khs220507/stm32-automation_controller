@@ -1,0 +1,21 @@
+실제 WPF 화면의 UI Automation 표시값 추출
+장비: NUCLEO-F401RE / ST-LINK / WIZ550io
+연결: COM3, UART 115200 8N1
+펌웨어: WPF CHECK_W5500 연동 구현본 (커밋 전)
+기대: VERSIONR=0x04; 전체 네트워크 기능 판정 아님
+ConnectionStatusText: COM3 연결됨
+W5500StatusText: W5500 버전 확인됨
+W5500VersionText: 버전 값: 0x04 · 기대값: 0x04
+W5500LastCheckText: 마지막 확인: 10:12:59.137
+W5500LogListBox:
+10:12:59.135 [RX      ] OK,CHECK_W5500,4<CR><LF>
+10:12:59.128 [TX      ] CHECK_W5500<CR><LF>
+
+마이카 UI 변경 후 실제 COM3 재연결·W5500 응답 확인
+ConnectionStatusText: COM3 연결됨
+W5500StatusText: W5500 버전 확인됨
+W5500VersionText: 버전 값: 0x04 · 기대값: 0x04
+W5500LastCheckText: 마지막 확인: 10:21:45.003
+W5500LogListBox:
+10:21:45.000 [RX      ] OK,CHECK_W5500,4<CR><LF>
+10:21:44.955 [TX      ] CHECK_W5500<CR><LF>

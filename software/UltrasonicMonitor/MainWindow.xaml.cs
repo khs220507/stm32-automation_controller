@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<string> _uartLogEntries = [];
     private readonly ObservableCollection<string> _mpuLogEntries = [];
     private readonly ObservableCollection<string> _ultrasonicLogEntries = [];
+    private readonly ObservableCollection<string> _w5500LogEntries = [];
     private readonly AsciiLineBuffer _lineBuffer = new(maxLineLength: 64);
     private readonly DispatcherTimer _receiveTimeoutTimer;
     private readonly DispatcherTimer _sensorPollTimer;
@@ -40,6 +41,7 @@ public partial class MainWindow : Window
         UartLogListBox.ItemsSource = _uartLogEntries;
         MpuLogListBox.ItemsSource = _mpuLogEntries;
         UltrasonicLogListBox.ItemsSource = _ultrasonicLogEntries;
+        W5500LogListBox.ItemsSource = _w5500LogEntries;
         _receiveTimeoutTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
         _receiveTimeoutTimer.Tick += ReceiveTimeoutTimer_Tick;
         // 각 센서의 실행 여부는 독립적이며 UART 요청만 번갈아 처리한다.
@@ -156,6 +158,7 @@ public partial class MainWindow : Window
     }
     private void StopButton_Click(object sender, RoutedEventArgs e) => StopUltrasonic();
     private void UartCheckButton_Click(object sender, RoutedEventArgs e) => SendCommand("PING");
+    private void W5500CheckButton_Click(object sender, RoutedEventArgs e) => SendCommand("CHECK_W5500");
 
     private void MpuStartButton_Click(object sender, RoutedEventArgs e)
     {
@@ -244,6 +247,7 @@ public partial class MainWindow : Window
     {
         bool available = _connected && _pendingCommand is null;
         UartCheckButton.IsEnabled = available;
+        W5500CheckButton.IsEnabled = available;
         MpuWakeButton.IsEnabled = available;
         AccelStartButton.IsEnabled = available && !_accelRepeating;
         AccelStopButton.IsEnabled = _connected && _accelRepeating;
@@ -265,12 +269,19 @@ public partial class MainWindow : Window
         SetMpuWakeDisplay(status);
         MpuWakeTimeText.Text = "확인 이력 없음";
         SetUartDisplay(status);
+        SetW5500Display(status);
+        W5500LastCheckText.Text = "확인 이력 없음";
         SetUltrasonicStatus(status);
         MpuLastCheckText.Text = UartLastCheckText.Text = SensorLastCheckText.Text = "확인 이력 없음";
     }
 
     private void BeginCommandDisplay(string command)
     {
+        if (command == "CHECK_W5500")
+        {
+            SetW5500Display("확인 중…");
+            W5500LastCheckText.Text = "응답 대기 중";
+        }
         if (command is "CONFIG_ACCEL" or "READ_ACCEL")
             AccelStatusText.Text = command == "CONFIG_ACCEL" ? "±2g 설정·확인 중…" : "새 측정값 대기 중…";
         if (command == "WAKE_MPU6050")
@@ -301,6 +312,10 @@ public partial class MainWindow : Window
         string timestamp = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
         switch (command)
         {
+            case "CHECK_W5500":
+                SetW5500Display(reason, failed: true);
+                W5500LastCheckText.Text = timestamp;
+                break;
             case "CONFIG_ACCEL":
             case "READ_ACCEL":
                 StopAccel();
@@ -449,6 +464,7 @@ public partial class MainWindow : Window
                     ClearAccelDisplay("센서 초기 대기 중…");
                 else if (message.Command == "CHECK_MPU6050") UpdateMpuDisplay(message);
                 else if (message.Command == "WAKE_MPU6050") UpdateMpuWakeDisplay(message);
+                else if (message.Command == "CHECK_W5500") UpdateW5500Display(message);
                 else ShowCommandFailure(_pendingCommand, $"시험 오류: {message.ErrorCode}");
                 break;
             case ProtocolMessageKind.AccelConfigured:
@@ -463,6 +479,9 @@ public partial class MainWindow : Window
                 break;
             case ProtocolMessageKind.Mpu6050:
                 UpdateMpuDisplay(message);
+                break;
+            case ProtocolMessageKind.W5500:
+                UpdateW5500Display(message);
                 break;
             case ProtocolMessageKind.Uart:
                 SetUartDisplay("요청·응답 확인됨 (PONG)", succeeded: true);
@@ -495,6 +514,37 @@ public partial class MainWindow : Window
             "TIMEOUT" => Color.FromRgb(183, 50, 50),
             _ => Color.FromRgb(181, 111, 0),
         });
+    }
+
+    private void SetW5500Display(string status, byte? version = null, bool failed = false)
+    {
+        W5500StatusText.Text = status;
+        W5500VersionText.Text = version is byte value
+            ? $"버전 값: 0x{value:X2} · 기대값: 0x{AsciiProtocolParser.ExpectedW5500Version:X2}"
+            : $"버전 값: — · 기대값: 0x{AsciiProtocolParser.ExpectedW5500Version:X2}";
+        W5500StatusText.Foreground = new SolidColorBrush(failed ? Color.FromRgb(183, 50, 50)
+            : version == AsciiProtocolParser.ExpectedW5500Version ? Color.FromRgb(29, 125, 79)
+            : Color.FromRgb(82, 97, 107));
+    }
+
+    private void UpdateW5500Display(ProtocolMessage message)
+    {
+        string status = message.SensorStatus switch
+        {
+            "OK" => "W5500 버전 확인됨",
+            "VERSION_MISMATCH" => "버전 불일치 · 전원·배선을 확인하세요",
+            _ => message.ErrorCode switch
+            {
+                "TIMEOUT" => "모듈 준비 또는 SPI 통신 시간 초과",
+                "NOT_READY" => "SPI 준비 안 됨 · 보드를 재시작한 뒤 확인하세요",
+                "HARDWARE_ERROR" => "SPI 통신 오류 · 보드 재시작 필요",
+                "DIRTY_STATE" => "이전 SPI 전송 상태가 남아 있음 · 보드 재시작 필요",
+                "INVALID_STATE" => "보드가 대기 상태일 때 실행하세요",
+                _ => $"확인 오류: {message.ErrorCode ?? "UNKNOWN"}",
+            },
+        };
+        SetW5500Display(status, message.Identity, failed: message.SensorStatus != "OK");
+        W5500LastCheckText.Text = $"마지막 확인: {DateTime.Now:HH:mm:ss.fff}";
     }
 
     private void SetUartDisplay(string status, bool failed = false, bool succeeded = false)
@@ -597,6 +647,7 @@ public partial class MainWindow : Window
         var (entries, listBox) = command switch
         {
             "PING" => (_uartLogEntries, UartLogListBox),
+            "CHECK_W5500" => (_w5500LogEntries, W5500LogListBox),
             "CHECK_MPU6050" or "WAKE_MPU6050" or "CONFIG_ACCEL" or "READ_ACCEL" => (_mpuLogEntries, MpuLogListBox),
             "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
             _ => (_logEntries, LogListBox),

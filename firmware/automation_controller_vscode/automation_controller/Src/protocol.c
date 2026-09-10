@@ -155,6 +155,13 @@ void protocol_send_mpu6050_wake(uint8_t before, uint8_t after)
     uart2_write_text("\r\n");
 }
 
+void protocol_send_w5500_version(uint8_t version)
+{
+    uart2_write_text("OK,CHECK_W5500,");
+    uart2_write_u32(version);
+    uart2_write_text("\r\n");
+}
+
 void protocol_send_hcsr04_out_of_range(uint32_t pulse_us)
 {
     uart2_write_text("HCSR04 OUT_OF_RANGE PULSE_US=");
@@ -181,6 +188,7 @@ static protocol_command_t protocol_parse_command(void)
 
     if (strcmp(command_buffer, "CONFIG_ACCEL") == 0) return PROTOCOL_COMMAND_CONFIG_ACCEL;
     if (strcmp(command_buffer, "READ_ACCEL") == 0) return PROTOCOL_COMMAND_READ_ACCEL;
+    if (strcmp(command_buffer, "CHECK_W5500") == 0) return PROTOCOL_COMMAND_CHECK_W5500;
 
     /* 표준 C strcmp는 두 문자열이 같으면 0을 반환한다. */
     if (strcmp(command_buffer, "PING") == 0)

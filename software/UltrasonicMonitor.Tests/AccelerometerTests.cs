@@ -153,15 +153,15 @@ public sealed class AccelerometerTests
             Call(w, "SetConnectionState", true, "모의 응답 · 실측 아님");
             Reply(w, "READ_ACCEL", "OK,READ_ACCEL,0,-8192,14189");
             var content = (FrameworkElement)w.Content;
-            var size = new Size(980, 1150);
+            var size = new Size(980, 700);
             content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
             var x = (FrameworkElement)w.FindName("AccelXText");
             var z = (FrameworkElement)w.FindName("AccelZText");
             Assert.IsTrue(x.ActualWidth > 0 && z.ActualWidth > 0);
             Assert.IsLessThanOrEqualTo(size.Width, z.TransformToAncestor(content).Transform(new Point(z.ActualWidth, 0)).X);
-            var bitmap = new RenderTargetBitmap(980, 1150, 96, 96, PixelFormats.Pbgra32);
+            var bitmap = new RenderTargetBitmap(980, 700, 96, 96, PixelFormats.Pbgra32);
             var background = new DrawingVisual();
-            using (var drawing = background.RenderOpen()) drawing.DrawRectangle(w.Background, null, new Rect(size));
+            using (var drawing = background.RenderOpen()) drawing.DrawRectangle(new SolidColorBrush(Color.FromRgb(243, 243, 243)), null, new Rect(size));
             bitmap.Render(background); bitmap.Render(content);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var file = File.Create(Path.Combine(AppContext.BaseDirectory, "가속도-모의응답-화면.png"));

@@ -6,6 +6,7 @@ public static class AsciiProtocolParser
 {
     // 사용자가 현재 모듈의 연결 확인 기대값으로 합의한 값. 장치 주소와는 별개다.
     public const byte ExpectedMpu6050Identity = 0x72;
+    public const byte ExpectedW5500Version = 0x04;
     private static readonly HashSet<string> States =
     [
         "INIT", "IDLE", "AUTO", "DIAG", "STOP", "FAULT",
@@ -44,6 +45,12 @@ public static class AsciiProtocolParser
 
         if (fields[0] == "OK")
         {
+            if (fields.Length == 3 && fields[1] == "CHECK_W5500"
+                && byte.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out byte version))
+                return new ProtocolMessage(ProtocolMessageKind.W5500, line, Command: fields[1],
+                    SensorStatus: version == ExpectedW5500Version ? "OK" : "VERSION_MISMATCH",
+                    Identity: version);
+
             if (fields.Length == 3 && fields[1] == "CONFIG_ACCEL" && fields[2] == "2G")
                 return new ProtocolMessage(ProtocolMessageKind.AccelConfigured, line, Command: fields[1]);
 
