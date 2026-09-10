@@ -9,6 +9,11 @@ try {
     $env:Path = (Split-Path $compilerPath -Parent) + ';' + $savedPath
     New-Item -ItemType Directory -Path 'build/host-tests' -Force | Out-Null
     & $compilerPath -std=c11 -Wall -Wextra -Werror -ITests/spi2_host -IInc `
+        Tests/w5500_host_test.c -o build/host-tests/w5500_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'W5500 호스트 시험 빌드 실패' }
+    & ./build/host-tests/w5500_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'W5500 호스트 시험 실패' }
+    & $compilerPath -std=c11 -Wall -Wextra -Werror -ITests/spi2_host -IInc `
         Tests/spi2_host_test.c -o build/host-tests/spi2_host_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'SPI2 호스트 시험 빌드 실패' }
     & ./build/host-tests/spi2_host_test.exe
