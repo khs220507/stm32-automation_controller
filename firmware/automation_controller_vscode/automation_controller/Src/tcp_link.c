@@ -317,12 +317,26 @@ void tcp_link_poll(void)
 
         if (free_size >= tx_size)
         {
-            if (!read_word(0x0024U, &pointer) ||
-                !write_bytes(2U, pointer, tx, tx_size) ||
-                !write_word(0x0024U, (uint16_t)(pointer + tx_size)) ||
-                !write_byte(1U, 0x0002U, (0x1U << 4)) ||
-                !command(0x20U))
+            /* 쓸 위치 확인. */
+            if (!read_word(0x0024U, &pointer))
                 return;
+
+            /* 보낼 데이터 복사. */
+            if (!write_bytes(2U, pointer, tx, tx_size))
+                return;
+
+            /* 복사한 만큼 쓰기 위치 이동. */
+            if (!write_word(0x0024U, (uint16_t)(pointer + tx_size)))
+                return;
+
+            /* 이전 SENDOK[4] 표시 지우기. */
+            if (!write_byte(1U, 0x0002U, (0x1U << 4)))
+                return;
+
+            /* SEND: 이제 LAN으로 보내기. */
+            if (!command(0x20U))
+                return;
+
             sending = true;
             send_started = timebase_now_us();
             tx_size = 0U;
