@@ -44,8 +44,11 @@ static bool write_byte(uint8_t block, uint16_t address, uint8_t value)
 
 static bool read_word(uint16_t address, uint16_t *value)
 {
+    bool success;
+
     uint8_t bytes[2];
-    if (read_bytes(1U, address, bytes, 2U) == false)
+    success = read_bytes(1U, address, bytes, 2U);
+    if (success == false)
         return false;
     *value = (uint16_t)(((uint16_t)bytes[0] << 8) | bytes[1]);
     return true;
@@ -59,12 +62,16 @@ static bool write_word(uint16_t address, uint16_t value)
 
 static bool stable_word(uint16_t address, uint16_t *value)
 {
+    bool success;
+
     uint16_t previous;
-    if (read_word(address, &previous) == false)
+    success = read_word(address, &previous);
+    if (success == false)
         return false;
     for (unsigned i = 0U; i < 3U; ++i)
     {
-        if (read_word(address, value) == false)
+        success = read_word(address, value);
+        if (success == false)
             return false;
 
         if (*value == previous)
@@ -77,13 +84,17 @@ static bool stable_word(uint16_t address, uint16_t *value)
 
 static bool command(uint8_t value)
 {
+    bool success;
+
     uint32_t start = timebase_now_us();
-    if (write_byte(1U, 0x0001U, value) == false)
+    success = write_byte(1U, 0x0001U, value);
+    if (success == false)
         return false;
     for (;;)
     {
         uint8_t pending;
-        if (read_bytes(1U, 0x0001U, &pending, 1U) == false)
+        success = read_bytes(1U, 0x0001U, &pending, 1U);
+        if (success == false)
             return false;
 
         if (pending == 0U)
@@ -96,71 +107,90 @@ static bool command(uint8_t value)
 
 static void close_socket(void)
 {
+    bool success;
+
     clear_session();
-    if (command(0x10U) == false)
+    success = command(0x10U);
+    if (success == false)
         return;
     tcp_link_status = TCP_LISTENING;
 }
 
 static bool configure(void)
 {
+    bool success;
+
     const uint8_t ip[] = {169U, 254U, 100U, 2U};
     const uint8_t mask[] = {255U, 255U, 0U, 0U};
     const uint8_t gateway[] = {0U, 0U, 0U, 0U};
     const uint8_t retry[] = {0x07U, 0xD0U, 3U};
     uint8_t version, mac[6], readback[4];
-    if (read_bytes(0U, 0x0039U, &version, 1U) == false)
+    success = read_bytes(0U, 0x0039U, &version, 1U);
+    if (success == false)
         return false;
 
     if (version != 4U)
         return false;
 
-    if (read_bytes(0U, 0x0009U, mac, 6U) == false)
+    success = read_bytes(0U, 0x0009U, mac, 6U);
+    if (success == false)
         return false;
 
     if ((mac[0] & 1U) != 0U || (mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]) == 0U)
         return false;
 
-    if (command(0x10U) == false)
+    success = command(0x10U);
+    if (success == false)
         return false;
 
-    if (write_bytes(0U, 0x0001U, gateway, 4U) == false)
+    success = write_bytes(0U, 0x0001U, gateway, 4U);
+    if (success == false)
         return false;
 
-    if (write_bytes(0U, 0x0005U, mask, 4U) == false)
+    success = write_bytes(0U, 0x0005U, mask, 4U);
+    if (success == false)
         return false;
 
-    if (write_bytes(0U, 0x000FU, ip, 4U) == false)
+    success = write_bytes(0U, 0x000FU, ip, 4U);
+    if (success == false)
         return false;
 
-    if (write_bytes(0U, 0x0019U, retry, 3U) == false)
+    success = write_bytes(0U, 0x0019U, retry, 3U);
+    if (success == false)
         return false;
 
-    if (read_bytes(0U, 0x000FU, readback, 4U) == false)
+    success = read_bytes(0U, 0x000FU, readback, 4U);
+    if (success == false)
         return false;
 
     if (memcmp(ip, readback, 4U) != 0)
         return io_result(SPI2_RESULT_HARDWARE_ERROR);
 
-    if (read_bytes(0U, 0x0005U, readback, 4U) == false)
+    success = read_bytes(0U, 0x0005U, readback, 4U);
+    if (success == false)
         return false;
 
     if (memcmp(mask, readback, 4U) != 0)
         return io_result(SPI2_RESULT_HARDWARE_ERROR);
 
-    if (write_byte(1U, 0x001EU, 2U) == false)
+    success = write_byte(1U, 0x001EU, 2U);
+    if (success == false)
         return false;
 
-    if (write_byte(1U, 0x001FU, 2U) == false)
+    success = write_byte(1U, 0x001FU, 2U);
+    if (success == false)
         return false;
 
-    if (write_byte(1U, 0x0000U, 1U) == false)
+    success = write_byte(1U, 0x0000U, 1U);
+    if (success == false)
         return false;
 
-    if (write_word(0x0004U, 5000U) == false)
+    success = write_word(0x0004U, 5000U);
+    if (success == false)
         return false;
 
-    if (write_byte(1U, 0x002FU, 1U) == false)
+    success = write_byte(1U, 0x002FU, 1U);
+    if (success == false)
         return false;
     configured = true;
     tcp_link_status = TCP_LISTENING;
@@ -194,6 +224,8 @@ void tcp_link_abort(void)
 
 void tcp_link_poll(void)
 {
+    bool success;
+
     /* W5500 제어 오류는 재부팅 전까지 차단. */
     if (tcp_link_status == TCP_IO_FAULT)
         return;
@@ -209,14 +241,16 @@ void tcp_link_poll(void)
         if (w5500_ready() == false)
             return;
 
-        if (configure() == false)
+        success = configure();
+        if (success == false)
             return;
     }
 
     uint8_t phy, state, flags;
 
     /* PHYCFGR LNK[0]=0이면 연결 정리. 제어 오류 상태는 보존. */
-    if (read_bytes(0U, 0x002EU, &phy, 1U) == false)
+    success = read_bytes(0U, 0x002EU, &phy, 1U);
+    if (success == false)
         return;
 
     if ((phy & (0x1U << 0)) == 0U)
@@ -234,7 +268,8 @@ void tcp_link_poll(void)
         return;
     }
 
-    if (read_bytes(1U, 0x0003U, &state, 1U) == false)
+    success = read_bytes(1U, 0x0003U, &state, 1U);
+    if (success == false)
         return;
 
     /* 상태가 바뀔 때만 대기 시작 시각 갱신. */
@@ -251,10 +286,12 @@ void tcp_link_poll(void)
     if (state == 0x00U)
     {
         clear_session();
-        if (write_byte(1U, 0x0002U, 0x1FU) == false)
+        success = write_byte(1U, 0x0002U, 0x1FU);
+        if (success == false)
             return;
 
-        if (command(0x01U) == false)
+        success = command(0x01U);
+        if (success == false)
             return;
         tcp_link_status = TCP_LISTENING;
         return;
@@ -262,7 +299,8 @@ void tcp_link_poll(void)
 
     if (state == 0x13U)
     {
-        if (command(0x02U))
+        success = command(0x02U);
+        if (success == true)
             tcp_link_status = TCP_LISTENING;
 
         return;
@@ -294,7 +332,8 @@ void tcp_link_poll(void)
     }
 
     /* Sn_IR: TIMEOUT[3]은 종료, SENDOK[4]는 1을 써서 해제. */
-    if (read_bytes(1U, 0x0002U, &flags, 1U) == false)
+    success = read_bytes(1U, 0x0002U, &flags, 1U);
+    if (success == false)
         return;
 
     if ((flags & (0x1U << 3)) != 0U)
@@ -307,7 +346,8 @@ void tcp_link_poll(void)
     {
         if ((flags & (0x1U << 4)) != 0U)
         {
-            if (write_byte(1U, 0x0002U, (0x1U << 4)) == false)
+            success = write_byte(1U, 0x0002U, (0x1U << 4));
+            if (success == false)
                 return;
             sending = false;
         }
@@ -330,29 +370,35 @@ void tcp_link_poll(void)
     {
         uint16_t free_size, pointer;
 
-        if (stable_word(0x0020U, &free_size) == false)
+        success = stable_word(0x0020U, &free_size);
+        if (success == false)
             return;
 
         if (free_size >= tx_size)
         {
             /* 쓸 위치 확인. */
-            if (read_word(0x0024U, &pointer) == false)
+            success = read_word(0x0024U, &pointer);
+            if (success == false)
                 return;
 
             /* 보낼 데이터 복사. */
-            if (write_bytes(2U, pointer, tx, tx_size) == false)
+            success = write_bytes(2U, pointer, tx, tx_size);
+            if (success == false)
                 return;
 
             /* 복사한 만큼 쓰기 위치 이동. */
-            if (write_word(0x0024U, (uint16_t)(pointer + tx_size)) == false)
+            success = write_word(0x0024U, (uint16_t)(pointer + tx_size));
+            if (success == false)
                 return;
 
             /* 이전 SENDOK[4] 표시 지우기. */
-            if (write_byte(1U, 0x0002U, (0x1U << 4)) == false)
+            success = write_byte(1U, 0x0002U, (0x1U << 4));
+            if (success == false)
                 return;
 
             /* SEND: 이제 LAN으로 보내기. */
-            if (command(0x20U) == false)
+            success = command(0x20U);
+            if (success == false)
                 return;
 
             sending = true;
@@ -367,7 +413,8 @@ void tcp_link_poll(void)
         uint16_t available, pointer;
 
         /* 도착한 데이터 길이 확인. */
-        if (stable_word(0x0026U, &available) == false)
+        success = stable_word(0x0026U, &available);
+        if (success == false)
             return;
 
         if (available == 0U)
@@ -378,19 +425,23 @@ void tcp_link_poll(void)
             available = sizeof(rx);
 
         /* 읽을 위치 확인. */
-        if (read_word(0x0028U, &pointer) == false)
+        success = read_word(0x0028U, &pointer);
+        if (success == false)
             return;
 
         /* W5500에서 STM32 버퍼로 복사. */
-        if (read_bytes(3U, pointer, rx, available) == false)
+        success = read_bytes(3U, pointer, rx, available);
+        if (success == false)
             return;
 
         /* 읽은 만큼 읽기 위치 이동. */
-        if (write_word(0x0028U, (uint16_t)(pointer + available)) == false)
+        success = write_word(0x0028U, (uint16_t)(pointer + available));
+        if (success == false)
             return;
 
         /* RECV: W5500에 데이터를 가져갔다고 알림. */
-        if (command(0x40U) == false)
+        success = command(0x40U);
+        if (success == false)
             return;
 
         rx_size = available;
