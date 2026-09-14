@@ -55,7 +55,8 @@ public sealed class Rs485TransportTests
             var transport = (ComboBox)window.FindName("TransportComboBox");
             transport.SelectedIndex = 1;
             Assert.AreEqual(Visibility.Collapsed, ((TextBox)window.FindName("HostTextBox")).Visibility);
-            Assert.AreEqual("RS-485 확인", ((Button)window.FindName("UartCheckButton")).Content);
+            Assert.AreEqual("센서 경로 PING (RS-485)", ((Button)window.FindName("UartCheckButton")).Content);
+            ((TabControl)window.FindName("WorkspaceTabs")).SelectedIndex = 1;
             var root = (FrameworkElement)window.Content;
             var size = new Size(980, 700);
             root.Measure(size);

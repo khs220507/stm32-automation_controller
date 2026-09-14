@@ -50,6 +50,7 @@ public sealed class Mpu6050UiTests
         var window = new MainWindow();
         try
         {
+            ((System.Windows.Controls.TabControl)window.FindName("WorkspaceTabs")).SelectedIndex = 1;
             var content = (FrameworkElement)window.Content;
             var size = new Size(980, 700);
             content.Measure(size);

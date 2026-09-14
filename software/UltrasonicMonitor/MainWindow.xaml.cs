@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         InitializeUartDiagnostics();
         InitializeRs485();
+        InitializeCommunicationTests();
         SetMpuDisplay("확인 전");
         LogListBox.ItemsSource = _logEntries;
         UartLogListBox.ItemsSource = _uartLogEntries;
@@ -71,6 +72,11 @@ public partial class MainWindow : Window
             !int.TryParse(TcpPortTextBox.Text, out int port) || port is < 1 or > 65535)
         {
             AppendLog("ERROR", "IPv4 주소와 1~65535 범위의 포트를 입력하세요.");
+            return;
+        }
+        if (_tcpTestRunning)
+        {
+            ConnectionStatusText.Text = "TCP 개별 시험 완료 후 연결하세요";
             return;
         }
         await ConnectTcpAsync(address, port);
@@ -642,13 +648,16 @@ public partial class MainWindow : Window
             "CHECK_HCSR04" => (_ultrasonicLogEntries, UltrasonicLogListBox),
             _ => (_logEntries, LogListBox),
         };
-        entries.Insert(0, $"{DateTime.Now:HH:mm:ss.fff} [{direction,-8}] {text}");
+        entries.Insert(0, $"{DateTime.Now:HH:mm:ss.fff} [센서/{TransportName}] [{direction,-8}] {text}");
         while (entries.Count > 500) entries.RemoveAt(entries.Count - 1);
         listBox.ScrollIntoView(entries[0]);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
-    { CloseUartDiagnostics(); Disconnect(); }
+    {
+        CloseCommunicationTests();
+        Disconnect();
+    }
 
     private void ClearAccelDisplay(string status, bool failed = false)
     {

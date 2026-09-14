@@ -15,6 +15,7 @@ public sealed class MpuWakeUiTests
         var w = new MainWindow();
         try
         {
+            ((TabControl)w.FindName("WorkspaceTabs")).SelectedIndex = 1;
             var content = (System.Windows.FrameworkElement)w.Content;
             var size = new System.Windows.Size(980, 700);
             void Layout()

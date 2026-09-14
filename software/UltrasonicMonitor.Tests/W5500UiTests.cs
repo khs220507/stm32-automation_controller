@@ -152,6 +152,7 @@ public sealed class W5500UiTests
         {
             Call(w, "SetConnectionState", true, "모의 응답 · 실측 아님");
             Begin(w); Call(w, "HandleReceivedLine", "OK,CHECK_W5500,4");
+            ((System.Windows.Controls.TabControl)w.FindName("WorkspaceTabs")).SelectedIndex = 1;
             var content = (FrameworkElement)w.Content;
             var size = new Size(980, 700);
             void Layout() { content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout(); }

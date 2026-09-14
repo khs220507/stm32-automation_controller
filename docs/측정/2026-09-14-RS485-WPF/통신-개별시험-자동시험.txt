@@ -1,0 +1,8 @@
+﻿  UltrasonicMonitor -> C:\workspace\stm32-baseboard\software\build\UltrasonicMonitor\bin\Debug\net10.0-windows\UltrasonicMonitor.dll
+  UltrasonicMonitor.Tests -> C:\workspace\stm32-baseboard\software\build\UltrasonicMonitor.Tests\bin\Debug\net10.0-windows\UltrasonicMonitor.Tests.dll
+C:\workspace\stm32-baseboard\software\build\UltrasonicMonitor.Tests\bin\Debug\net10.0-windows\UltrasonicMonitor.Tests.dll(.NETCoreApp,Version=v10.0)에 대한 테스트 실행
+지정된 패턴과 일치한 총 테스트 파일 수는 1개입니다.
+경고: 결과 파일을 덮어쓰는 중: C:\workspace\stm32-baseboard\software\build\TestResults\통신분리-시험.trx
+결과 파일: C:\workspace\stm32-baseboard\software\build\TestResults\통신분리-시험.trx
+
+통과!  - 실패:     0, 통과:   128, 건너뜀:     0, 전체:   128, 기간: 8 s - UltrasonicMonitor.Tests.dll (net10.0)

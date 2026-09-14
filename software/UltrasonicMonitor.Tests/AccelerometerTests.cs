@@ -152,6 +152,7 @@ public sealed class AccelerometerTests
         {
             Call(w, "SetConnectionState", true, "모의 응답 · 실측 아님");
             Reply(w, "READ_ACCEL", "OK,READ_ACCEL,0,-8192,14189");
+            ((System.Windows.Controls.TabControl)w.FindName("WorkspaceTabs")).SelectedIndex = 1;
             var content = (FrameworkElement)w.Content;
             var size = new Size(980, 700);
             content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();

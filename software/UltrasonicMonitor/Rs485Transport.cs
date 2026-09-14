@@ -40,16 +40,17 @@ public partial class MainWindow
         HostTextBox.Visibility = serial ? Visibility.Collapsed : Visibility.Visible;
         TcpPortTextBox.Visibility = HostTextBox.Visibility;
         Rs485PortComboBox.Visibility = serial ? Visibility.Visible : Visibility.Collapsed;
-        UartCheckButton.Content = serial ? "RS-485 확인" : "TCP 확인";
+        UartCheckButton.Content = serial ? "센서 경로 PING (RS-485)" : "센서 경로 PING (TCP)";
         TransportDetailText.Text = serial ? "RS-485 · 115200 8N1 · CRLF" : "Ethernet · TCP · CRLF";
     }
 
     private async Task ConnectRs485Async(string name)
     {
         Disconnect();
-        if (_diagnosticPort?.PortName == name)
+        if (_uartTestPort == name || _rs485TestPort == name)
         {
-            CloseUartDiagnostics();
+            ConnectionStatusText.Text = "개별 시험에서 사용 중인 COM 포트입니다";
+            return;
         }
         var port = new SerialPort(name, 115200, Parity.None, 8, StopBits.One)
         {
