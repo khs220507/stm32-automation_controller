@@ -1,2 +1,4 @@
 ﻿2026-09-14T13:32:19.1064305+09:00 COM4 115200 8N1 opened; physical wiring inspection is not inferred from this test
 2026-09-14T13:32:19.9287433+09:00 FAIL Exception calling "ReadLine" with "0" argument(s): "The operation has timed out."
+2026-09-14T13:38:01.1597897+09:00 COM4 115200 8N1 opened; physical wiring inspection is not inferred from this test
+2026-09-14T13:38:01.9816452+09:00 FAIL Exception calling "ReadLine" with "0" argument(s): "The operation has timed out."

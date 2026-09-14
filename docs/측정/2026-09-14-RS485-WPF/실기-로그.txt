@@ -85,3 +85,45 @@ Reading 32-bit memory content
 0x40023808 : 00000000
 
 
+2026-09-14T13:38:14.7477160+09:00 USER REPORT: swapped AT044 TX/RX wires; following register read after COM4 PING timeout
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.25V
+SWD freq    : 4000 KHz
+Connect mode: Hot Plug
+Reset mode  : Software reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+Reading 32-bit memory content
+  Size          : 16 Bytes
+  Address:      : 0x200001EC
+0x200001EC : 00000000 00000000 00000000 00000000
+
+Reading 32-bit memory content
+  Size          : 24 Bytes
+  Address:      : 0x40011000
+0x40011000 : 000000C0 00000000 0000008B 00002024
+0x40011010 : 00000000 00000000
+
+
+
+Reading 32-bit memory content
+  Size          : 40 Bytes
+  Address:      : 0x40020400
+0x40020400 : A9008280 00000000 A80000C0 00004100
+0x40020410 : 000017DF 00001000 00000000 00000000
+0x40020420 : 77000000 55500000
+
+
