@@ -8,6 +8,16 @@ try {
     # GCC의 cc1/런타임 DLL을 찾도록 이 프로세스에서만 검색 경로를 추가한다.
     $env:Path = (Split-Path $compilerPath -Parent) + ';' + $savedPath
     New-Item -ItemType Directory -Path 'build/host-tests' -Force | Out-Null
+    & $compilerPath -std=c11 -Wall -Wextra -Werror -ITests/uart1_host -IInc `
+        Tests/uart1_host_test.c -o build/host-tests/uart1_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'USART1 호스트 빌드 실패' }
+    & ./build/host-tests/uart1_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'USART1 호스트 시험 실패' }
+    & $compilerPath -std=c11 -Wall -Wextra -Werror -IInc `
+        Tests/protocol_transport_host_test.c Src/protocol.c -o build/host-tests/protocol_transport_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw '통신 경로 호스트 빌드 실패' }
+    & ./build/host-tests/protocol_transport_host_test.exe
+    if ($LASTEXITCODE -ne 0) { throw '통신 경로 호스트 시험 실패' }
     & $compilerPath -std=c11 -Wall -Wextra -Werror -ITests/uart_diag_host -IInc `
         Tests/uart_diag_host_test.c -o build/host-tests/uart_diag_host_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'UART 진단 호스트 빌드 실패' }

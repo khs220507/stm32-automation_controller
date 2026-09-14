@@ -12,6 +12,7 @@
 #include "tcp_link.h"
 #include "w5500.h"
 #include "uart_diag.h"
+#include "uart1.h"
 
 #define HCSR04_MEASUREMENT_PERIOD_US 100000U
 /* I2C 전송 1회 한도. 실기 검증 전 임시값 10 ms.
@@ -67,6 +68,7 @@ void app_state_run(void)
          * I2C BUSY나 센서 미연결이 다른 시험의 기동을 막지 않게 한다. */
         timebase_init();
         uart_diag_init();
+        uart1_init();
         tcp_link_init();
         protocol_init();
         protocol_send_ready();
@@ -79,17 +81,29 @@ void app_state_run(void)
     if (network_session != tcp_link_session())
     {
         network_session = tcp_link_session();
-        protocol_init();
-        if (!tcp_link_connected())
+        protocol_reset_tcp();
+        if (tcp_link_connected() == false)
         {
             board_io_set_safe_outputs();
             app_state_clear_measurement();
-            mpu6050_accel_invalidate();
+            /* TCP 자동운전만 종료한다. 독립 진단의 센서 설정은 유지한다. */
+            if (current_state == STATE_AUTO || current_state == STATE_STOP)
+                mpu6050_accel_invalidate();
             current_state = STATE_IDLE;
         }
     }
-    if (!tcp_link_connected()) return;
     command = protocol_poll_command();
+    if (protocol_is_rs485() &&
+        (command == PROTOCOL_COMMAND_START || command == PROTOCOL_COMMAND_STOP))
+    {
+        protocol_send_error(command == PROTOCOL_COMMAND_START ? "START" : "STOP", "UNSUPPORTED");
+        return;
+    }
+    if (command == PROTOCOL_COMMAND_UNKNOWN)
+    {
+        protocol_send_error("UNKNOWN", "INVALID_COMMAND");
+        return;
+    }
     if (command == PROTOCOL_COMMAND_CHECK_W5500)
     {
         if (current_state != STATE_IDLE)

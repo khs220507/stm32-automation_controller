@@ -65,6 +65,11 @@ public partial class MainWindow
             RefreshSerialPorts();
             return;
         }
+        if (_rs485Port?.PortName == name)
+        {
+            SerialStatusText.Text = "RS-485에서 사용 중 · UART 포트를 선택하세요";
+            return;
+        }
         try
         {
             if (_diagnosticPort?.PortName != name || !_diagnosticPort.IsOpen)

@@ -1,0 +1,130 @@
+﻿      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.26V
+SWD freq    : 4000 KHz
+Connect mode: Under Reset
+Reset mode  : Hardware reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+
+Opening and parsing file: automation_controller.elf
+
+
+Memory Programming ...
+  File          : automation_controller.elf
+  Size          : 16.94 KB 
+  Address       : 0x08000000
+
+
+Erasing memory corresponding to segment 0:
+Erasing internal memory sectors [0 1]
+Download in Progress:
+�������������������������������������������������� 0%
+�������������������������������������������������� 100%
+
+File download complete
+Time elapsed during download operation: 00:00:00.659
+
+
+
+Verifying...
+
+
+Read progress:
+�������������������������������������������������� 50%
+�������������������������������������������������� 100%
+
+Time elapsed during verifying operation: 00:00:00.115
+
+
+Download verified successfully
+
+
+
+MCU Reset
+
+Software reset is performed
+
+Algorithm       Hash                                                                   Path                                       
+---------       ----                                                                   ----                                       
+SHA256          6A19F9B6574A6652802A8738913993C45BEFA62726038EC7185B64B5EF23E05E       C:\workspace\stm32-baseboard\firmware\au...
+
+
+
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.25V
+SWD freq    : 4000 KHz
+Connect mode: Under Reset
+Reset mode  : Hardware reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+
+Opening and parsing file: automation_controller.elf
+
+
+Memory Programming ...
+  File          : automation_controller.elf
+  Size          : 16.97 KB 
+  Address       : 0x08000000
+
+
+Erasing memory corresponding to segment 0:
+Erasing internal memory sectors [0 1]
+Download in Progress:
+�������������������������������������������������� 0%
+�������������������������������������������������� 100%
+
+File download complete
+Time elapsed during download operation: 00:00:00.642
+
+
+
+Verifying...
+
+
+Read progress:
+�������������������������������������������������� 50%
+�������������������������������������������������� 100%
+
+Time elapsed during verifying operation: 00:00:00.116
+
+
+Download verified successfully
+
+
+
+MCU Reset
+
+Software reset is performed
+
+Algorithm       Hash                                                                   Path                                       
+---------       ----                                                                   ----                                       
+SHA256          4C8297450F7C7FCF654511007958D5B3EFBFA5099E33A13A346FFD84C3B7BE13       C:\workspace\stm32-baseboard\firmware\au...
+
+
+

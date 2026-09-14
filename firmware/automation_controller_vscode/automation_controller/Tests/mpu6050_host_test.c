@@ -15,6 +15,8 @@ static int operations, fail_at, ignore_write, no_data, writes, bursts;
 static i2c1_result_t injected;
 static const char *input;
 static char output[256];
+extern bool host_tcp_connected;
+extern uint32_t host_tcp_session;
 
 void timebase_init(void) { }
 uint32_t timebase_now_us(void) { return now; }
@@ -105,6 +107,18 @@ int main(void)
     regs[0x3F] = 0U; regs[0x40] = 1U;
     request("READ_ACCEL\r\n", "OK,READ_ACCEL,32767,-1,1\r\n");
     puts("PASS: configure/read commands, register preservation, big-endian signed axes, UART response");
+    host_tcp_connected = false;
+    host_tcp_session++;
+    input = "";
+    app_state_run();
+    mpu6050_accel_t independent_sample;
+    const char *independent_error = mpu6050_accel_read(&independent_sample);
+    assert(independent_error == NULL);
+    assert(independent_sample.x == 32767);
+    host_tcp_connected = true;
+    host_tcp_session++;
+    app_state_run();
+    puts("PASS: idle TCP disconnect preserves the independent sensor diagnostic configuration");
 
     for (int operation = 1; operation <= 19; operation++)
     {

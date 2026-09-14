@@ -2,6 +2,7 @@
 #define PROTOCOL_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef enum
 {
@@ -20,6 +21,8 @@ typedef enum
 } protocol_command_t;
 
 void protocol_init(void);
+void protocol_reset_tcp(void);
+bool protocol_is_rs485(void);
 protocol_command_t protocol_poll_command(void);
 void protocol_send_ready(void);
 void protocol_send_state(const char *state_name);

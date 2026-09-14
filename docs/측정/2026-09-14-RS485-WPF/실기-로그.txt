@@ -1,0 +1,87 @@
+﻿2026-09-14T13:25:28.9589259+09:00 COM4 PING ERROR Exception calling "ReadLine" with "0" argument(s): "The operation has timed out."
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.26V
+SWD freq    : 4000 KHz
+Connect mode: Hot Plug
+Reset mode  : Software reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+Reading 32-bit memory content
+  Size          : 16 Bytes
+  Address:      : 0x200001EC
+0x200001EC : 00000000 00000000 00000000 00000000
+�������������������������������������������������� 0%
+�������������������������������������������������� 100%
+
+0x200000DC : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x200000EC : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x200000FC : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x2000010C : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2026-09-14T13:29:25.8101972+09:00 ERROR Exception calling "Open" with "0" argument(s): "Access to the port 'COM3' is denied."
+2026-09-14T13:30:01.0473294+09:00 TCP PING RX OK,PING,PONG
+2026-09-14T13:30:01.0578600+09:00 TCP CHECK_W5500 RX OK,CHECK_W5500,4
+2026-09-14T13:30:01.0670374+09:00 TCP CHECK_MPU6050 RX OK,CHECK_MPU6050,114
+2026-09-14T13:30:01.0826075+09:00 TCP CONFIG_ACCEL RX OK,CONFIG_ACCEL,2G
+2026-09-14T13:30:01.2616788+09:00 TCP READ_ACCEL RX OK,READ_ACCEL,-4549,-3392,16054
+2026-09-14T13:32:31.0379822+09:00 final ELF COM3 PING RX OK,PING,PONG
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.25V
+SWD freq    : 4000 KHz
+Connect mode: Hot Plug
+Reset mode  : Software reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+Reading 32-bit memory content
+  Size          : 16 Bytes
+  Address:      : 0x200001EC
+0x200001EC : 00000000 00000000 00000000 00000000
+
+Reading 32-bit memory content
+  Size          : 24 Bytes
+  Address:      : 0x40011000
+0x40011000 : 000000C0 00000000 0000008B 00002024
+0x40011010 : 00000000 00000000
+
+
+
+Reading 32-bit memory content
+  Size          : 40 Bytes
+  Address:      : 0x40020400
+0x40020400 : A9008280 00000000 A80000C0 00004100
+0x40020410 : 000017DF 00001000 00000000 00000000
+0x40020420 : 77000000 55500000
+
+
+
+Reading 32-bit memory content
+  Size          : 4 Bytes
+  Address:      : 0x40023808
+0x40023808 : 00000000
+
+

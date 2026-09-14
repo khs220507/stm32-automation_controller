@@ -123,8 +123,17 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <Border Background="#70FFFFFF" CornerRadius="12" Padding="10,5" Margin="0,0,12,0" VerticalAlignment="Center">
-                    <TextBlock x:Name="ConnectionStatusText" Text="연결 안 됨" FontSize="11" Foreground="#52616B" />
+                    <TextBlock x:Name="ConnectionStatusText" Text="연결 안 됨" FontSize="11" Foreground="#52616B" MaxWidth="205"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                 </Border>
+                <ComboBox x:Name="TransportComboBox" Width="94" MinHeight="30" Margin="0,0,6,0"
+                          VerticalContentAlignment="Center" AutomationProperties.Name="연결 방식">
+                    <ComboBoxItem Content="TCP" />
+                    <ComboBoxItem Content="RS-485" />
+                </ComboBox>
+                <ComboBox x:Name="Rs485PortComboBox" Width="178" MinHeight="30" Margin="0,0,6,0" Visibility="Collapsed"
+                          VerticalContentAlignment="Center" DropDownOpened="Rs485Ports_DropDownOpened"
+                          AutomationProperties.Name="RS-485 COM 포트" ToolTip="USB-RS485 · 115200 8N1" />
                 <TextBox x:Name="HostTextBox" Text="169.254.100.2" Width="122" MinHeight="30" Margin="0,0,6,0"
                          VerticalContentAlignment="Center" AutomationProperties.Name="보드 IPv4 주소" />
                 <TextBox x:Name="TcpPortTextBox" Text="5000" Width="50" MinHeight="30" Margin="0,0,6,0"
@@ -142,7 +151,7 @@
             <Border Grid.Column="0" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="20" /><RowDefinition Height="24" /><RowDefinition Height="28" /><RowDefinition Height="20" /><RowDefinition Height="32" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <TextBlock Text="TCP · UART" Style="{StaticResource Heading}" />
+                    <TextBlock Text="TCP / RS-485 · UART" Style="{StaticResource Heading}" FontSize="13" />
                     <TextBlock x:Name="UartStatusText" Grid.Row="1" Text="확인 전" Style="{StaticResource Muted}" VerticalAlignment="Center" />
                     <Button x:Name="UartCheckButton" Grid.Row="2" Content="TCP 확인" HorizontalAlignment="Left"
                             Click="UartCheckButton_Click" IsEnabled="False" Style="{StaticResource CompactButton}" />
@@ -263,7 +272,7 @@
                 </Grid.ColumnDefinitions>
                 <Border Style="{StaticResource Card}" Padding="10,10,6,6">
                     <TabControl Background="Transparent" BorderThickness="0">
-                        <TabItem Header="TCP"><ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" /></TabItem>
+                        <TabItem Header="TCP / RS-485"><ListBox x:Name="UartLogListBox" Style="{StaticResource LogStyle}" /></TabItem>
                         <TabItem Header="UART"><ListBox x:Name="SerialLogListBox" Style="{StaticResource LogStyle}" /></TabItem>
                     </TabControl>
                 </Border>
@@ -285,7 +294,7 @@
             </Border>
         </Grid>
         <DockPanel Grid.Row="4" VerticalAlignment="Bottom" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left" Text="Ethernet · TCP · CRLF" Style="{StaticResource Muted}" />
+            <TextBlock x:Name="TransportDetailText" DockPanel.Dock="Left" Text="Ethernet · TCP · CRLF" Style="{StaticResource Muted}" />
             <TextBlock x:Name="AccelModeText" DockPanel.Dock="Right" Text="정지" Style="{StaticResource Muted}" />
         </DockPanel>
     </Grid>

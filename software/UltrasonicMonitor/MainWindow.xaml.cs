@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         InitializeUartDiagnostics();
+        InitializeRs485();
         SetMpuDisplay("확인 전");
         LogListBox.ItemsSource = _logEntries;
         UartLogListBox.ItemsSource = _uartLogEntries;
@@ -44,12 +45,27 @@ public partial class MainWindow : Window
         W5500LogListBox.ItemsSource = _w5500LogEntries;
         _sensorPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _sensorPollTimer.Tick += (_, _) => RunSensorScheduler();
-        AppendLog("INFO", "LAN 준비 완료. 보드 IP와 TCP 포트를 확인하고 연결하세요.");
+        AppendLog("INFO", "TCP 또는 RS-485를 선택하고 연결하세요. RS-485는 115200 8N1입니다.");
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
     {
-        if (_tcpClient is not null) { Disconnect(); return; }
+        if (_tcpClient is not null || _rs485Port is not null)
+        {
+            Disconnect();
+            return;
+        }
+        if (IsRs485Selected)
+        {
+            if (Rs485PortComboBox.SelectedItem is not string name)
+            {
+                AppendLog("ERROR", "USB-RS485 COM 포트를 선택하세요.");
+                RefreshRs485Ports();
+                return;
+            }
+            await ConnectRs485Async(name);
+            return;
+        }
         if (!IPAddress.TryParse(HostTextBox.Text.Trim(), out var address) ||
             address.AddressFamily != AddressFamily.InterNetwork ||
             !int.TryParse(TcpPortTextBox.Text, out int port) || port is < 1 or > 65535)
@@ -68,6 +84,7 @@ public partial class MainWindow : Window
         _tcpClient = client;
         _connectionCancellation = cancellation;
         HostTextBox.IsEnabled = TcpPortTextBox.IsEnabled = false;
+        TransportComboBox.IsEnabled = false;
         ConnectButton.Content = "취소";
         ConnectionStatusText.Text = "TCP 연결 중…";
         try
@@ -96,6 +113,7 @@ public partial class MainWindow : Window
         _connectionCancellation?.Dispose();
         _connectionCancellation = null;
         client?.Dispose();
+        CloseRs485();
         CancelPendingCommand();
         _lineBuffer.Reset();
         SetConnectionState(false, null);
@@ -111,6 +129,7 @@ public partial class MainWindow : Window
             : Color.FromRgb(82, 97, 107));
         ConnectButton.Content = connected ? "연결 해제" : "연결";
         HostTextBox.IsEnabled = TcpPortTextBox.IsEnabled = !connected;
+        TransportComboBox.IsEnabled = Rs485PortComboBox.IsEnabled = connected == false;
         ResetDiagnosticDisplays(connected ? "확인 전" : "연결 안 됨");
         UpdateTestButtons();
     }
@@ -313,10 +332,11 @@ public partial class MainWindow : Window
     private async void SendCommand(string command)
     {
         var client = _tcpClient;
-        if (!_connected || client is null)
+        var serial = _rs485Port;
+        if (_connected == false || (client is null && serial is null))
         {
-            AppendLog("ERROR", "TCP 연결이 필요합니다.", command);
-            ShowCommandFailure(command, "TCP 연결을 확인하세요");
+            AppendLog("ERROR", $"{TransportName} 연결이 필요합니다.", command);
+            ShowCommandFailure(command, $"{TransportName} 연결을 확인하세요");
             return;
         }
         if (_pendingCommand is not null) return;
@@ -328,14 +348,26 @@ public partial class MainWindow : Window
         try
         {
             AppendLog("TX", command + "<CR><LF>", command);
-            await client.GetStream().WriteAsync(Encoding.ASCII.GetBytes(command + "\r\n"), token);
+            if (serial is not null)
+            {
+                await Task.Run(() => serial.Write(command + "\r\n"), token);
+            }
+            else
+            {
+                await client!.GetStream().WriteAsync(Encoding.ASCII.GetBytes(command + "\r\n"), token);
+            }
         }
-        catch (Exception exception) when (exception is IOException or SocketException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
+        catch (Exception exception) when (exception is IOException or SocketException or OperationCanceledException
+            or ObjectDisposedException or InvalidOperationException or TimeoutException or UnauthorizedAccessException)
         {
-            if (!ReferenceEquals(_tcpClient, client) || token.IsCancellationRequested) return;
+            if (ReferenceEquals(_tcpClient, client) == false || ReferenceEquals(_rs485Port, serial) == false
+                || token.IsCancellationRequested)
+            {
+                return;
+            }
             Disconnect();
-            AppendLog("ERROR", $"TCP 송신 실패: {exception.Message}", command);
-            ShowCommandFailure(command, "TCP 송신 실패 · 다시 연결하세요");
+            AppendLog("ERROR", $"{TransportName} 송신 실패: {exception.Message}", command);
+            ShowCommandFailure(command, $"{TransportName} 송신 실패 · 다시 연결하세요");
         }
     }
 
@@ -347,7 +379,10 @@ public partial class MainWindow : Window
         if (_pendingCommand == command)
         {
             AppendLog("TIMEOUT", $"{command} 응답이 500 ms 안에 도착하지 않았습니다.", command);
-            if (_tcpClient is not null) Disconnect();
+            if (_tcpClient is not null || _rs485Port is not null)
+            {
+                Disconnect();
+            }
             ShowCommandFailure(command, "보드 응답 없음 (500 ms)");
             CancelPendingCommand();
         }
@@ -436,6 +471,10 @@ public partial class MainWindow : Window
                 break;
             case ProtocolMessageKind.Uart:
                 SetUartDisplay("요청·응답 확인됨 (PONG)", succeeded: true);
+                if (_rs485Port is not null)
+                {
+                    ConnectionStatusText.Text = $"RS-485 {_rs485Port.PortName} 응답 확인됨";
+                }
                 UartLastCheckText.Text = $"마지막 시험: {DateTime.Now:HH:mm:ss.fff}";
                 break;
             case ProtocolMessageKind.Ultrasonic:
