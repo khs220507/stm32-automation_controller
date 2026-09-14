@@ -1,0 +1,116 @@
+﻿Time: 2026-09-14T13:11:40.7594782+09:00
+Tool: STM32CubeProgrammer 2.23.0 / ST-LINK SWD
+Board: NUCLEO-F401RE
+Firmware: USART1 clock enable only; no USART1 pin or TX/RX configuration
+Git: 7d23bbc; existing spi2.c whitespace-only change included
+ELF SHA256: 7ABFEC24C16B51A5FDBFB278CBAD5C837ED36D33E6C07A7F06E25B3DFFD05AF8
+Before download (observed in preceding HOTPLUG read): RCC_AHB1ENR=0x00000007; RCC_APB2ENR=0x00000000; ST-LINK voltage=3.25V
+Expected after run: GPIOBEN bit 1=1; USART1EN bit 4=1
+AT044 resistance and module supply voltage have not been measured.
+Command: -c port=SWD sn=066DFF525650657287233612 mode=UR -d <ELF> -v -rst
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.26V
+SWD freq    : 4000 KHz
+Connect mode: Under Reset
+Reset mode  : Hardware reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+
+Opening and parsing file: automation_controller.elf
+
+
+Memory Programming ...
+  File          : automation_controller.elf
+  Size          : 15.02 KB 
+  Address       : 0x08000000
+
+
+Erasing memory corresponding to segment 0:
+Erasing internal memory sector 0
+Download in Progress:
+�������������������������������������������������� 0%
+�������������������������������������������������� 100%
+
+File download complete
+Time elapsed during download operation: 00:00:00.427
+
+
+
+Verifying...
+
+
+Read progress:
+�������������������������������������������������� 50%
+�������������������������������������������������� 100%
+
+Time elapsed during verifying operation: 00:00:00.100
+
+
+Download verified successfully
+
+
+
+MCU Reset
+
+Software reset is performed
+After reset: HOTPLUG read RCC_AHB1ENR, RCC_APB2ENR, GPIOB_MODER, USART1_CR1
+      -------------------------------------------------------------------
+                       STM32CubeProgrammer v2.23.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 066DFF525650657287233612
+ST-LINK FW  : V2J48M35
+Board       : NUCLEO-F401RE
+Voltage     : 3.25V
+SWD freq    : 4000 KHz
+Connect mode: Hot Plug
+Reset mode  : Software reset
+Device ID   : 0x433
+Revision ID : Rev Z
+Device name : STM32F401xD/E
+NVM size    : 512 KBytes
+Device type : MCU
+Device CPU  : Cortex-M4
+BL Version  : 0xD1
+
+
+Reading 32-bit memory content
+  Size          : 4 Bytes
+  Address:      : 0x40023830
+0x40023830 : 00000007
+
+
+
+Reading 32-bit memory content
+  Size          : 4 Bytes
+  Address:      : 0x40023844
+0x40023844 : 00000010
+
+
+
+Reading 32-bit memory content
+  Size          : 4 Bytes
+  Address:      : 0x40020400
+0x40020400 : A9000280
+
+
+
+Reading 32-bit memory content
+  Size          : 4 Bytes
+  Address:      : 0x4001100C
+0x4001100C : 00000000
+
+
