@@ -12,6 +12,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/sysmem.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/system_stm32f4xx.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/timebase.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/uart1.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/uart2.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/uart_diag.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/w5500.c"
